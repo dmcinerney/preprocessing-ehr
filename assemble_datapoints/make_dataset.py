@@ -5,6 +5,19 @@ import os
 import pickle as pkl
 import torch
 from argparse import ArgumentParser
+import pandas as pd
+import pickle as pkl
+from tqdm import tqdm
+
+def get_codes(df, code_file=None):
+    codes = set()
+    for i,row in df.iterrows():
+        for code in row.targets:
+            codes.add(code)
+    if code_file is not None:
+        with open(code_file, 'wb') as f:
+            pkl.dump(list(codes), f)
+    return codes
 
 class MedicalPredictionDataset(Dataset):
     # saves to files in a folder called name
@@ -13,9 +26,8 @@ class MedicalPredictionDataset(Dataset):
         patient_ids = set(list(reports.patient_id) + list(codes.patient_id))
         data = []
         code_mapping = code_metainfo.code_mapping if code_metainfo is not None else None
-        for i,patient_id in enumerate(patient_ids):
+        for patient_id in tqdm(patient_ids, total=len(patient_ids)):
             data.extend(cls.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping))
-            print(i)
         df = pd.DataFrame(data, columns=cls.columns())
         dataset = cls(code_metainfo, df)
         if folder is not None:
@@ -101,13 +113,14 @@ class ReportsToCodes(MedicalPredictionDataset):
             reports_text = patient.concatenate_reports(before_date=target_date-pd.to_timedelta('1 day'))
             if len(reports_text) == 0:
                 continue
-            negative_targets = code_set.difference(set(persistent_targets.target.tolist()))
-            datapoints.append([reports_text, persistent_targets.target[persistent_targets.date >= target_date].tolist(), negative_targets])
+            negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
+            positive_targets = persistent_targets.target[persistent_targets.date >= target_date].tolist()
+            datapoints.append([reports_text, positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
         return datapoints
 
     @classmethod
     def columns(cls):
-        return ['reports', 'positive_targets', 'negative_targets']
+        return ['reports', 'targets', 'labels']
 
     @classmethod
     def code_set(cls, codes, code_mapping=None):
@@ -117,22 +130,6 @@ class ReportsToCodes(MedicalPredictionDataset):
         else:
             code_set = code_mapping.values()
         return code_set
-
-class ReportsToCode(ReportsToCodes):
-    @classmethod
-    def get_datapoints(cls, reports, codes, patient_id, code_mapping=None):
-        datapoints = ReportsToCodes.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping)
-        new_datapoints = []
-        for reports,pos_targets,neg_targets in datapoints:
-            for pos_target in pos_targets:
-                new_datapoints.append([reports, pos_target, 1])
-            for neg_target in neg_targets:
-                new_datapoints.append([reports, neg_target, 0])
-        return new_datapoints
-
-    @classmethod
-    def columns(cls):
-        return ['reports', 'target', 'label']
 
 class CodeMetaInfo:
     @classmethod
@@ -156,4 +153,9 @@ if __name__ == '__main__':
     #dataset = ReportsToCodes.create(reports, codes, folder=args.folder)
     with open(os.path.join(args.folder, 'dataset.pkl'), 'rb') as f:
         dataset = pkl.load(f)
-    dataset.df.to_json(os.path.join(args.folder, 'mimic_reports_to_codes.data'), orient='records', lines=True, compression='gzip')
+    div1 = int(len(dataset.df)*.7)
+    div2 = int(len(dataset.df)*.85)
+    dataset.df[:div1].to_json(os.path.join(args.folder, 'train_mimic.data'), orient='records', lines=True, compression='gzip')
+    dataset.df[div1:div2].to_json(os.path.join(args.folder, 'val_mimic.data'), orient='records', lines=True, compression='gzip')
+    dataset.df[div2:].to_json(os.path.join(args.folder, 'test_mimic.data'), orient='records', lines=True, compression='gzip')
+    get_codes(dataset.df, code_file=os.path.join(args.folder, 'codes.pkl'))
