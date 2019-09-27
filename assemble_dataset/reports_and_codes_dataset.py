@@ -95,9 +95,9 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("folder")
     args = parser.parse_args()
-    #reports = pd.read_csv(os.path.join(args.folder, 'medical_reports.csv'), parse_dates=['date'])
-    #codes = pd.read_csv(os.path.join(args.folder, 'medical_codes.csv'), parse_dates=['date'])
-    #dataset = ReportsToCodes.create(reports, codes, folder=args.folder)
+    reports = pd.read_csv(os.path.join(args.folder, 'medical_reports.csv'), parse_dates=['date'])
+    codes = pd.read_csv(os.path.join(args.folder, 'medical_codes.csv'), parse_dates=['date'])
+    dataset = ReportsToCodes.create(reports, codes, folder=args.folder)
     with open(os.path.join(args.folder, 'dataset.pkl'), 'rb') as f:
         dataset = pkl.load(f)
     div1 = int(len(dataset.df)*.7)
