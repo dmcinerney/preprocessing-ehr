@@ -13,3 +13,5 @@ class CodeMetaInfo:
         self.code_mapping = code_mapping
         self.code_graph = code_graph
 
+if __name__ == '__main__':
+    icd_c

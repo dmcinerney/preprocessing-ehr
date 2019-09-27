@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4"
-new_data_folder = "/home/jered/Documents/data/mimic_processed"
+new_data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed"
 
 def create_report_csv(data_folder, new_data_folder):
     print("reading in reports")

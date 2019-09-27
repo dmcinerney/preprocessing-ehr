@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 import pandas as pd
 import pickle as pkl
 from tqdm import tqdm
+from patient import Patient
 
 def get_codes(df, code_file=None):
     codes = set()
@@ -58,52 +59,11 @@ class MedicalPredictionDataset(Dataset):
     def __getitem__(self, index):
         return {column: self.df[column][int(index) if type(index) is torch.Tensor else index] for column in self.columns()}
 
-class Patient:
-    def __init__(self, reports, codes):
-        self.reports = reports
-        self.codes = codes
-
-    def concatenate_reports(self, before_date=None):
-        report_separator = '<report_separator>'
-        time_separator = '<time_separator>'
-        concatenated_reports = ''
-        valid_rows = self.reports[self.reports.date < before_date]\
-                     if before_date is not None else self.reports
-        prev_date = None
-        for i,row in valid_rows.iterrows():
-            days = 0 if prev_date is None else (row.date-prev_date).days
-            prev_date = row.date
-            concatenated_reports += '\n\n'
-            concatenated_reports += (' ' + time_separator)*days
-            concatenated_reports += ' ' + report_separator
-            concatenated_reports += ' ' + row.text
-        return concatenated_reports
-
-    def targets(self, code_mapping=None):
-        # TODO: change this to using groupbys
-        unique_codes = self.codes[['code_type', 'code']].drop_duplicates()
-        targets = {}
-        for i,row in unique_codes.iterrows():
-            code = str((row.code_type, row.code)).replace('.','')
-            if code_mapping is not None and code not in code_mapping.keys():
-                continue
-            code_rows = self.codes[(self.codes.code_type == row.code_type) & (self.codes.code == row.code)]
-            if code_mapping is not None:
-                targets[code_mapping[code]] = code_rows if code_mapping[code] not in targets.keys() else\
-                                              pd.concat([targets[code_mapping[code]], code_rows], 0)
-            else:
-                targets[code] = code_rows
-        targets = [(target,rows.sort_values('date')) for target,rows in targets.items()]
-        # targets = sorted(targets, key=lambda t:-len(t[1]))
-        return targets
-
 class ReportsToCodes(MedicalPredictionDataset):
     @classmethod
     def get_datapoints(cls, reports, codes, patient_id, code_mapping=None, frequency_threshold=5):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
-        patient_reports = reports[reports.patient_id == patient_id].sort_values('date')
-        patient_codes = codes[codes.patient_id == patient_id].sort_values('date')
-        patient = Patient(patient_reports, patient_codes)
+        patient = Patient(patient_id, reports=reports, codes=codes)
         target_list = patient.targets(code_mapping=code_mapping)
         targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency'])
         datapoints = []
@@ -142,7 +102,9 @@ if __name__ == '__main__':
         dataset = pkl.load(f)
     div1 = int(len(dataset.df)*.7)
     div2 = int(len(dataset.df)*.85)
-    dataset.df[:div1].to_json(os.path.join(args.folder, 'train_mimic.data'), orient='records', lines=True, compression='gzip')
-    dataset.df[div1:div2].to_json(os.path.join(args.folder, 'val_mimic.data'), orient='records', lines=True, compression='gzip')
-    dataset.df[div2:].to_json(os.path.join(args.folder, 'test_mimic.data'), orient='records', lines=True, compression='gzip')
-    get_codes(dataset.df, code_file=os.path.join(args.folder, 'codes.pkl'))
+    new_folder = os.path.join(args.folder, 'preprocessed', 'reports_and_codes')
+    os.mkdir(new_folder)
+    dataset.df[:div1].to_json(os.path.join(new_folder, 'train_mimic.data'), orient='records', lines=True, compression='gzip')
+    dataset.df[div1:div2].to_json(os.path.join(new_folder, 'val_mimic.data'), orient='records', lines=True, compression='gzip')
+    dataset.df[div2:].to_json(os.path.join(new_folder, 'test_mimic.data'), orient='records', lines=True, compression='gzip')
+    get_codes(dataset.df, code_file=os.path.join(new_folder, 'codes.pkl'))
