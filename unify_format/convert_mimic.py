@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from tqdm import tqdm
 
 data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4"
 new_data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed"
@@ -31,21 +32,19 @@ def create_code_csv(data_folder, new_data_folder):
     print("iterating through codes")
     code_rows = []
     code_columns = ['patient_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table']
-    for i,row in code_df.iterrows():
+    for i,row in tqdm(code_df.iterrows(), total=len(code_df)):
         if row.ICD9_CODE == row.ICD9_CODE:
-            icd_code_rows = code_names_df.SHORT_TITLE[code_names_df.ICD9_CODE.str.match(pat='^0*'+row.ICD9_CODE+'\d*$')]]
+            icd_code_rows = code_names_df[code_names_df.ICD9_CODE.str.match(pat='^0*'+row.ICD9_CODE+'\d*$')]
             code_rows.append([
                 row.SUBJECT_ID,
                 pd.to_datetime(adm_df.DISCHTIME[adm_df.HADM_ID==row.HADM_ID].iloc[0]),
                 row.SEQ_NUM,
-                [short_title for short_title in icd_code_rows.SHORT_TITLE,
+                [short_title for short_title in icd_code_rows.SHORT_TITLE],
                 "ICD9",
 #                [icd_code for icd_code in icd_code_rows.ICD9_CODE][0], # TODO: don't just select the first one
                 row.ICD9_CODE,
                 ["DIAGNOSES_ICD.csv.gz","ADMISSIONS.csv.gz","D_ICD_DIAGNOSES.csv.gz"]
             ])
-        if (i+1) % 1000 == 0:
-            print(i+1, '/', len(code_df))
     pd.DataFrame(code_rows, columns=code_columns).to_csv(os.path.join(new_data_folder, 'medical_codes.csv'), index=False)
 
 """

@@ -1,9 +1,7 @@
-from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
 import os
 import pickle as pkl
-import torch
 from argparse import ArgumentParser
 import pandas as pd
 import pickle as pkl
@@ -20,7 +18,7 @@ def get_codes(df, code_file=None):
             pkl.dump(list(codes), f)
     return codes
 
-class MedicalPredictionDataset(Dataset):
+class MedicalPredictionDataset:
     # saves to files in a folder called name
     @classmethod
     def create(cls, reports, codes, code_metainfo=None, folder=None):
