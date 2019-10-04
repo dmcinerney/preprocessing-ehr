@@ -39,7 +39,7 @@ def main():
         non_leaf_codes = []
         for i,row in icd10[icd10.code.str.len() == l].iterrows():
             curr_node = str(('ICD10',row.code))
-            G.add_node(curr_node)
+            G.add_node(curr_node, description=row.description)
             if l >= 4:
                 parent = str(('ICD10',row.code[:l-1]))
                 G.add_edge(parent, curr_node)
@@ -48,6 +48,9 @@ def main():
     # add icd9 entries to code mapping
     for i,row in icd9.iterrows():
         icd10code = icd9to10.icd10cm[icd9to10.icd9cm == row.code].iloc[0]
+        if icd10code == 'NoDx':
+            print("WARNING: %s has no corresponding icd10 code, it is not being included in the mapping" % row.code)
+            continue
         code_mapping[str(('ICD9',row.code))] = str(('ICD10',icd10code))
     with open(code_mapping_file, 'wb') as f:
         pkl.dump(code_mapping, f)
