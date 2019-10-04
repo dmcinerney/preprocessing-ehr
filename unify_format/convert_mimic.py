@@ -10,7 +10,7 @@ def create_report_csv(data_folder, new_data_folder):
     text_df = pd.read_csv(os.path.join(data_folder, "NOTEEVENTS.csv.gz"), low_memory=False)
     print("iterating through reports")
     text_rows = []
-    text_columns = ['patient_id', 'date', 'report_type', 'description', 'text', 'from_table']
+    text_columns = ['patient_id', 'date', 'report_type', 'description', 'text', 'from_table', 'other_info']
     for i,row in text_df.iterrows():
         text_rows.append([
             row.SUBJECT_ID,
@@ -18,7 +18,8 @@ def create_report_csv(data_folder, new_data_folder):
             row.CATEGORY,
             row.DESCRIPTION,
             row.TEXT,
-            "NOTEEVENTS"
+            "NOTEEVENTS",
+            {}
         ])
         if (i+1) % 1000 == 0:
             print(i+1, '/', len(text_df))
@@ -31,7 +32,7 @@ def create_code_csv(data_folder, new_data_folder):
     code_names_df = pd.read_csv(os.path.join(data_folder, "D_ICD_DIAGNOSES.csv.gz"), low_memory=False)
     print("iterating through codes")
     code_rows = []
-    code_columns = ['patient_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table']
+    code_columns = ['patient_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table', 'other_info']
     for i,row in tqdm(code_df.iterrows(), total=len(code_df)):
         if row.ICD9_CODE == row.ICD9_CODE:
             icd_code_rows = code_names_df[code_names_df.ICD9_CODE.str.match(pat='^0*'+row.ICD9_CODE+'\d*$')]
@@ -43,7 +44,8 @@ def create_code_csv(data_folder, new_data_folder):
                 "ICD9",
 #                [icd_code for icd_code in icd_code_rows.ICD9_CODE][0], # TODO: don't just select the first one
                 row.ICD9_CODE,
-                ["DIAGNOSES_ICD.csv.gz","ADMISSIONS.csv.gz","D_ICD_DIAGNOSES.csv.gz"]
+                ["DIAGNOSES_ICD.csv.gz","ADMISSIONS.csv.gz","D_ICD_DIAGNOSES.csv.gz"],
+                {}
             ])
     pd.DataFrame(code_rows, columns=code_columns).to_csv(os.path.join(new_data_folder, 'medical_codes.csv'), index=False)
 
@@ -67,8 +69,15 @@ def create_code_csv(data_folder, new_data_folder):
         print(count)
 """
 
-if __name__ == '__main__':
+def create_admissions_csv(data_folder, new_data_folder):
+    adm_df = pd.read_csv(os.path.join(data_folder, "ADMISSIONS.csv.gz"), low_memory=False)
+    new_df = adm_df[['SUBJECT_ID', 'ADMITTIME', 'DISCHTIME', 'DIAGNOSIS', 'HOSPITAL_EXPIRE_FLAG']]
+    new_df.columns = ['patient_id', 'date_start', 'date_end', 'diagnosis', 'expire_flag']
+    new_df.to_csv(os.path.join(new_data_folder, 'admissions.csv'), index=False)
+
+def main():
     if not os.path.exists(new_data_folder):
         os.mkdir(new_data_folder)
-#    create_report_csv(data_folder, new_data_folder)
+    create_report_csv(data_folder, new_data_folder)
     create_code_csv(data_folder, new_data_folder)
+    create_admissions_csv(data_folder, new_data_folder)

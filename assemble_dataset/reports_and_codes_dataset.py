@@ -6,29 +6,19 @@ from argparse import ArgumentParser
 import pandas as pd
 import pickle as pkl
 from tqdm import tqdm
-from patient import Patient
+from assemble_dataset.patient import Patient
 
-def get_codes(df, code_file=None):
-    codes = set()
-    for i,row in df.iterrows():
-        for code in row.targets:
-            codes.add(code)
-    if code_file is not None:
-        with open(code_file, 'wb') as f:
-            pkl.dump(list(codes), f)
-    return codes
 
 class MedicalPredictionDataset:
     # saves to files in a folder called name
     @classmethod
-    def create(cls, reports, codes, code_metainfo=None, folder=None):
+    def create(cls, reports, codes, code_mapping=None, folder=None):
         patient_ids = set(list(reports.patient_id) + list(codes.patient_id))
         data = []
-        code_mapping = code_metainfo.code_mapping if code_metainfo is not None else None
         for patient_id in tqdm(patient_ids, total=len(patient_ids)):
             data.extend(cls.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping))
         df = pd.DataFrame(data, columns=cls.columns())
-        dataset = cls(code_metainfo, df)
+        dataset = cls(code_mapping, df)
         if folder is not None:
             with open(os.path.join(folder, 'dataset.pkl'), 'wb') as datasetfile:
                 pkl.dump(dataset, datasetfile)
@@ -47,8 +37,8 @@ class MedicalPredictionDataset:
     def get_datapoints(cls, reports, codes, patient_id):
         raise NotImplementedError
 
-    def __init__(self, code_metainfo, dataframe):
-        self.code_metainfo = code_metainfo
+    def __init__(self, code_mapping, dataframe):
+        self.code_metainfo = code_mapping
         self.df = dataframe
 
     def __len__(self):
@@ -89,20 +79,25 @@ class ReportsToCodes(MedicalPredictionDataset):
             code_set = code_mapping.values()
         return code_set
 
-if __name__ == '__main__':
+def main():
     parser = ArgumentParser()
     parser.add_argument("folder")
+    parser.add_argument("--code_mapping")
     args = parser.parse_args()
     reports = pd.read_csv(os.path.join(args.folder, 'medical_reports.csv'), parse_dates=['date'])
     codes = pd.read_csv(os.path.join(args.folder, 'medical_codes.csv'), parse_dates=['date'])
-    dataset = ReportsToCodes.create(reports, codes, folder=args.folder)
+    if args.code_mapping is not None:
+        with open(args.code_mapping, 'rb') as f:
+            code_mapping = pkl.load(f)
+    else:
+        code_mapping = None
+    dataset = ReportsToCodes.create(reports, codes, folder=args.folder, code_mapping=code_mapping)
     with open(os.path.join(args.folder, 'dataset.pkl'), 'rb') as f:
         dataset = pkl.load(f)
     div1 = int(len(dataset.df)*.7)
     div2 = int(len(dataset.df)*.85)
-    new_folder = os.path.join(args.folder, 'preprocessed', 'reports_and_codes')
+    new_folder = os.path.join(args.folder, 'reports_and_codes')
     os.mkdir(new_folder)
     dataset.df[:div1].to_json(os.path.join(new_folder, 'train_mimic.data'), orient='records', lines=True, compression='gzip')
     dataset.df[div1:div2].to_json(os.path.join(new_folder, 'val_mimic.data'), orient='records', lines=True, compression='gzip')
     dataset.df[div2:].to_json(os.path.join(new_folder, 'test_mimic.data'), orient='records', lines=True, compression='gzip')
-    get_codes(dataset.df, code_file=os.path.join(new_folder, 'codes.pkl'))

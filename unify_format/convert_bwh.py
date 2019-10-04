@@ -47,7 +47,7 @@ code_files = set([
     # TODO: should I add more?
 ])
 
-if __name__ == '__main__':
+def main():
     subfolder1 = 'PreprocessedTextFiles'
     subfolder2 = 'FinalPreprocessedData'
     os.mkdir(os.path.join(folder, subfolder1))
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         preprocess_to_csv(folder, subfolder1, filename, v, contains_report=k in report_files)
     df = {k:pd.read_csv(os.path.join(folder, subfolder1, filename % v), delimiter='|', lineterminator='\r') for k,v in tables.items()}
     os.mkdir(os.path.join(folder, subfolder2))
-    text_columns = ['patient_id', 'date', 'report_type', 'description', 'text', 'from_table']
+    text_columns = ['patient_id', 'date', 'report_type', 'description', 'text', 'from_table', 'other_info']
     text_rows = []
     for k in report_files:
         for i,row in df[k].iterrows():
@@ -66,13 +66,13 @@ if __name__ == '__main__':
                 continue
             # date = row.Report_Date_Time # TODO: make this into a number for sorting purposes
             date = pd.to_datetime(datetime.strptime(row.Report_Date_Time, '%m/%d/%Y %I:%M:%S %p'))
-            report_type = row.Report_Status
+            report_type = from_table = k
             description = row.Report_Description
             text = row.Report_Text
-            from_table = k
-            text_rows.append([patient_id, date, report_type, description, text, from_table])
+            other_info = {'report_status':row.Report_Status}
+            text_rows.append([patient_id, date, report_type, description, text, report_type, from_table, other_info])
     pd.DataFrame(text_rows, columns=text_columns).to_csv(os.path.join(folder, subfolder2, 'medical_reports.csv'), index=False)
-    code_columns = ['patient_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table']
+    code_columns = ['patient_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table', 'other_info']
     code_rows = []
     for k in code_files:
         for i,row in df[k].iterrows():
@@ -88,5 +88,5 @@ if __name__ == '__main__':
             else:
                 raise NotImplementedError
             from_table = k
-            code_rows.append([patient_id, date, flag, name, code_type, code, from_table])
+            code_rows.append([patient_id, date, flag, name, code_type, code, from_table, {}])
     pd.DataFrame(code_rows, columns=code_columns).to_csv(os.path.join(folder, subfolder2, 'medical_codes.csv'), index=False)
