@@ -21,6 +21,15 @@ def process_file(filename1, filename2, split_at, encoding='utf-8'):
             for i,line in enumerate(file):
                 file2.write(line[:split_at].strip()+'\t'+line[split_at:].strip()+'\n')
 
+def create_node_and_parents(G, code_mapping, code, description=None):
+    curr_node = str(('ICD10', code))
+    G.add_node(curr_node, description=description)
+    code_mapping['curr_node'] = curr_node
+    for l in range(len(code)-1,-1,-1):
+        parent = str(('ICD10', code[:l]))
+        G.add_edge(parent, curr_node)
+        curr_node = parent
+
 def main():
     process_file(icd9_file, icd9_file+'_processed.csv', 6, encoding="ISO-8859-1")
     icd9 = pd.read_csv(icd9_file+'_processed.csv', names=['code', 'description'], delimiter='\t')
@@ -31,27 +40,16 @@ def main():
     G = nx.DiGraph()
     # make icd10 graph and start code mapping
     code_mapping = {}
-    non_leaf_codes = []
-    for l in range(7, 2, -1):
-        if l >= 4:
-            for code in non_leaf_codes:
-                G.add_edge(str(('ICD10',code[:l-1])),str(('ICD10',code)))
-        non_leaf_codes = []
-        for i,row in icd10[icd10.code.str.len() == l].iterrows():
-            curr_node = str(('ICD10',row.code))
-            G.add_node(curr_node, description=row.description)
-            if l >= 4:
-                parent = str(('ICD10',row.code[:l-1]))
-                G.add_edge(parent, curr_node)
-                non_leaf_codes.append(row.code[:l-1])
-            code_mapping[curr_node] = curr_node
+    for i,row in icd10.iterrows():
+        create_node_and_parents(G, code_mapping, row.code, description=row.description)
     # add icd9 entries to code mapping
     for i,row in icd9.iterrows():
         icd10code = icd9to10.icd10cm[icd9to10.icd9cm == row.code].iloc[0]
         if icd10code == 'NoDx':
             print("WARNING: %s has no corresponding icd10 code, it is not being included in the mapping" % row.code)
             continue
-        code_mapping[str(('ICD9',row.code))] = str(('ICD10',icd10code))
+        code_mapping[str(('ICD9', row.code))] = str(('ICD10', icd10code))
+        create_node_and_parents(G, code_mapping, icd10code)
     with open(code_mapping_file, 'wb') as f:
         pkl.dump(code_mapping, f)
     with open(code_graph_file, 'wb') as f:

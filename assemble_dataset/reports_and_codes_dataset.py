@@ -6,28 +6,27 @@ from argparse import ArgumentParser
 import pandas as pd
 import pickle as pkl
 from tqdm import tqdm
+from random import shuffle
 from assemble_dataset.patient import Patient
 
 
 class MedicalPredictionDataset:
     # saves to files in a folder called name
     @classmethod
-    def create(cls, reports, codes, code_mapping=None, code_graph=None, folder=None):
-        patient_ids = set(list(reports.patient_id) + list(codes.patient_id))
+    def create(cls, patient_ids, reports, codes, code_mapping=None, code_graph=None):
         data = []
-        for patient_id in tqdm(patient_ids, total=len(patient_ids)):
-            data.extend(cls.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping, code_graph=code_graph))
-        df = pd.DataFrame(data, columns=cls.columns())
-        dataset = cls(code_mapping, df)
-        if folder is not None:
-            with open(os.path.join(folder, 'dataset.pkl'), 'wb') as datasetfile:
-                pkl.dump(dataset, datasetfile)
-        return dataset
-
-    @classmethod
-    def load_from_folder(cls, folder):
-        with open(os.path.join(folder, 'dataset.pkl'), 'rb') as datasetfile:
-            return pkl.load(datasetfile)
+        iterator = tqdm(patient_ids, total=len(patient_ids))
+        total_skipped, total_retrieved, total_num_datapoints = 0, 0, 0
+        for patient_id in iterator:
+            datapoints, skipped, retrieved = cls.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping, code_graph=code_graph)
+            data.extend(datapoints)
+            total_skipped += skipped
+            total_retrieved += retrieved
+            total_num_datapoints += len(datapoints)
+            iterator.set_postfix({'skipped':total_skipped,
+                                  'retrieved':total_retrieved,
+                                  'num_datapoints':total_num_datapoints})
+        return pd.DataFrame(data, columns=cls.columns())
 
     @classmethod
     def columns(cls):
@@ -37,25 +36,16 @@ class MedicalPredictionDataset:
     def get_datapoints(cls, reports, codes, patient_id):
         raise NotImplementedError
 
-    def __init__(self, code_mapping, dataframe):
-        self.code_metainfo = code_mapping
-        self.df = dataframe
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, index):
-        return {column: self.df[column][int(index) if type(index) is torch.Tensor else index] for column in self.columns()}
-
 class ReportsToCodes(MedicalPredictionDataset):
     @classmethod
-    def get_datapoints(cls, reports, codes, patient_id, code_mapping=None, code_graph=None, frequency_threshold=5):
+    def get_datapoints(cls, reports, codes, patient_id, code_mapping=None, code_graph=None, frequency_threshold=2):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
         patient = Patient(patient_id, reports=reports, codes=codes)
-        target_list = patient.targets(code_mapping=code_mapping, code_graph=code_graph)
+        target_list, skipped = patient.targets(code_mapping=code_mapping, code_graph=code_graph)
         targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency'])
+        retreived = len(targets)
         datapoints = []
-        persistent_targets = targets[targets.frequency > frequency_threshold].sort_values('date')
+        persistent_targets = targets[targets.frequency >= frequency_threshold].sort_values('date')
         for i,target_row in persistent_targets.iterrows():
             target_date = target_row.date
             reports_text = patient.concatenate_reports(before_date=target_date-pd.to_timedelta('1 day'))
@@ -64,7 +54,7 @@ class ReportsToCodes(MedicalPredictionDataset):
             negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
             positive_targets = persistent_targets.target[persistent_targets.date >= target_date].tolist()
             datapoints.append([reports_text, positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
-        return datapoints
+        return datapoints, skipped, retreived
 
     @classmethod
     def columns(cls):
@@ -97,13 +87,15 @@ def main():
             code_graph = pkl.load(f)
     else:
         code_graph = None
-    dataset = ReportsToCodes.create(reports, codes, folder=args.folder, code_mapping=code_mapping, code_graph=code_graph)
-    with open(os.path.join(args.folder, 'dataset.pkl'), 'rb') as f:
-        dataset = pkl.load(f)
-    div1 = int(len(dataset.df)*.7)
-    div2 = int(len(dataset.df)*.85)
+    patient_ids = list(set(reports.patient_id))
+    shuffle(patient_ids)
+    div1 = int(len(patient_ids)*.7)
+    div2 = int(len(patient_ids)*.85)
     new_folder = os.path.join(args.folder, 'reports_and_codes')
     os.mkdir(new_folder)
-    dataset.df[:div1].to_json(os.path.join(new_folder, 'train_mimic.data'), orient='records', lines=True, compression='gzip')
-    dataset.df[div1:div2].to_json(os.path.join(new_folder, 'val_mimic.data'), orient='records', lines=True, compression='gzip')
-    dataset.df[div2:].to_json(os.path.join(new_folder, 'test_mimic.data'), orient='records', lines=True, compression='gzip')
+    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
+    train_dataset.to_json(os.path.join(new_folder, 'train.data'), orient='records', lines=True, compression='gzip')
+    val_dataset = ReportsToCodes.create(patient_ids[div1:div2], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
+    val_dataset.to_json(os.path.join(new_folder, 'val.data'), orient='records', lines=True, compression='gzip')
+    test_dataset = ReportsToCodes.create(patient_ids[div2:], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
+    test_dataset.to_json(os.path.join(new_folder, 'test.data'), orient='records', lines=True, compression='gzip')
