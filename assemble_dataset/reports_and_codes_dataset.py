@@ -13,12 +13,12 @@ from assemble_dataset.patient import Patient
 class MedicalPredictionDataset:
     # saves to files in a folder called name
     @classmethod
-    def create(cls, patient_ids, reports, codes, code_mapping=None, code_graph=None):
+    def create(cls, patient_ids, reports, codes, code_mapping=None):
         data = []
         iterator = tqdm(patient_ids, total=len(patient_ids))
         total_skipped, total_retrieved, total_num_datapoints = 0, 0, 0
         for patient_id in iterator:
-            datapoints, skipped, retrieved = cls.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping, code_graph=code_graph)
+            datapoints, skipped, retrieved = cls.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping)
             data.extend(datapoints)
             total_skipped += skipped
             total_retrieved += retrieved
@@ -38,10 +38,10 @@ class MedicalPredictionDataset:
 
 class ReportsToCodes(MedicalPredictionDataset):
     @classmethod
-    def get_datapoints(cls, reports, codes, patient_id, code_mapping=None, code_graph=None, frequency_threshold=2):
+    def get_datapoints(cls, reports, codes, patient_id, code_mapping=None, frequency_threshold=3):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
         patient = Patient(patient_id, reports=reports, codes=codes)
-        target_list, skipped = patient.targets(code_mapping=code_mapping, code_graph=code_graph)
+        target_list, skipped = patient.targets(code_mapping=code_mapping)
         targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency'])
         retreived = len(targets)
         datapoints = []
@@ -66,14 +66,24 @@ class ReportsToCodes(MedicalPredictionDataset):
             unique_codes = codes[['code_type','code']].drop_duplicates()
             code_set = set(str((code_type, code)).replace('.','') for code_type, code in zip(unique_codes.code_type.tolist(), unique_codes.code.tolist()))
         else:
-            code_set = set(code_mapping.values())
+            code_set = set(code_mapping.values()).difference(set([None]))
         return code_set
+
+def get_counts(dataset):
+    print("getting counts")
+    counts = {}
+    for i,row in tqdm(dataset.iterrows(), total=len(dataset)):
+        for j in range(len(row.targets)):
+            key = row.targets[j]
+            if key not in counts.keys():
+                counts[key] = [0, 0]
+            counts[key][row.labels[j]] += 1
+    return counts
 
 def main():
     parser = ArgumentParser()
     parser.add_argument("folder")
     parser.add_argument("--code_mapping")
-    parser.add_argument("--code_graph")
     args = parser.parse_args()
     reports = pd.read_csv(os.path.join(args.folder, 'medical_reports.csv'), parse_dates=['date'])
     codes = pd.read_csv(os.path.join(args.folder, 'medical_codes.csv'), parse_dates=['date'])
@@ -82,20 +92,27 @@ def main():
             code_mapping = pkl.load(f)
     else:
         code_mapping = None
-    if args.code_graph is not None:
-        with open(args.code_graph, 'rb') as f:
-            code_graph = pkl.load(f)
-    else:
-        code_graph = None
     patient_ids = list(set(reports.patient_id))
     shuffle(patient_ids)
     div1 = int(len(patient_ids)*.7)
     div2 = int(len(patient_ids)*.85)
     new_folder = os.path.join(args.folder, 'reports_and_codes')
     os.mkdir(new_folder)
-    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
+    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping)
+    counts = get_counts(train_dataset)
+    with open(os.path.join(new_folder, 'counts.pkl'), 'wb') as f:
+        pkl.dump(counts, f)
+    print(counts)
+    threshold = 50
+    useless_codes = set([k for k,v in counts.items() if v[0] < threshold or v[1] < threshold])
+    print('useless codes:', useless_codes)
+    print('usefull codes:', set(counts.keys()).difference(useless_codes))
+    for k,v in code_mapping.items():
+        if v in useless_codes:
+            code_mapping[k] = None
+    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping)
     train_dataset.to_json(os.path.join(new_folder, 'train.data'), orient='records', lines=True, compression='gzip')
-    val_dataset = ReportsToCodes.create(patient_ids[div1:div2], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
+    val_dataset = ReportsToCodes.create(patient_ids[div1:div2], reports, codes, code_mapping=code_mapping)
     val_dataset.to_json(os.path.join(new_folder, 'val.data'), orient='records', lines=True, compression='gzip')
-    test_dataset = ReportsToCodes.create(patient_ids[div2:], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
+    test_dataset = ReportsToCodes.create(patient_ids[div2:], reports, codes, code_mapping=code_mapping)
     test_dataset.to_json(os.path.join(new_folder, 'test.data'), orient='records', lines=True, compression='gzip')

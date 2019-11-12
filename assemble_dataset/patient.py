@@ -30,7 +30,7 @@ class Patient:
             concatenated_reports += ' ' + row.text
         return concatenated_reports
 
-    def targets(self, code_mapping=None, code_graph=None):
+    def targets(self, code_mapping=None):
         if self.codes is None:
             raise Exception
         # TODO: change this to using groupbys
@@ -43,27 +43,26 @@ class Patient:
                 if code_str not in code_mapping.keys():
                     """
                     df = pd.DataFrame(list(code_mapping.keys()))
-                    # create a list of similar codes that have the original code as a prefix but have an additional character
+                    # create a list of similar codes
                     similar_codes = list(df[df[0].str.startswith("(\'%s\', \'%s" % (code_type, code)) & (df[0].str.len()==len(code_str)+1)][0])
+                    code_length = len(eval(code_str)[1])
+                    similar_codes += sum([list(df[df[0] == code_str[:l]][0]) for l in range(len(code_str)-3,len(code_str)-2-code_length,-1)], [])
                     if len(similar_codes) > 0:
                         # map to where a similar code maps to
                         mapped_code = code_mapping[similar_codes[0]]
-                        if code_graph is not None:
-                            # if there is a graph take the predecessor of the mapped code bc it should be on the level of generality that the original code had
-                            predecessors = list(code_graph.predecessors(mapped_code))
-                            if len(predecessors) > 0:
-                                mapped_code = predecessors[0]
+                        if mapped_code is None:
+                            continue
                         print("WARNING: unknown code being mapped: %s to %s" % (code_str, mapped_code)) # TODO: change this to an actual warning
                         print("    Similar Codes: "+str(similar_codes)) # TODO: change this to an actual warning
                     else:
                         # skip code
                         print("WARNING: code %s is unknown, skipping it!" % code_str) # TODO: change this to an actual warning
-                        print("    Similar Codes: "+str(similar_codes)) # TODO: change this to an actual warning
+                        skipped += 1
                         continue
                     """
                     # skip code
                     skipped += 1
-                    print("WARNING: code %s is unknown, skipping it!" % code_str) # TODO: change this to an actual warning
+                    # print("WARNING: code %s is unknown, skipping it!" % code_str) # TODO: change this to an actual warning
                     continue
                 else:
                     mapped_code = code_mapping[code_str]
