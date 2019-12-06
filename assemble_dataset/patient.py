@@ -9,17 +9,16 @@ class Patient:
         self.admissions = admissions[admissions.patient_id == patient_id].sort_values('date_start')\
             if admissions is not None else None
 
-    def concatenate_reports(self, after_date=None, before_date=None):
+    def compile_reports(self, after_date=None, before_date=None):
         if self.reports is None:
             raise Exception
-        report_separator = '<report_separator>'
-        time_separator = '<time_separator>'
-        concatenated_reports = ''
         valid_rows = self.reports
         if after_date is not None:
             valid_rows = valid_rows[valid_rows.date >= after_date]
         if before_date is not None:
             valid_rows = valid_rows[valid_rows.date < before_date]
+        return valid_rows
+        """
         prev_date = None
         for i,row in valid_rows.iterrows():
             days = 0 if prev_date is None else (row.date-prev_date).days
@@ -29,6 +28,7 @@ class Patient:
             concatenated_reports += ' ' + report_separator
             concatenated_reports += ' ' + row.text
         return concatenated_reports
+        """
 
     def targets(self, code_mapping=None):
         if self.codes is None:
