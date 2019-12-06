@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import re
 from datetime import datetime
+from tqdm import tqdm
 
 tables = {
     'ContactInformation':'Con',
@@ -21,8 +22,8 @@ tables = {
     'ReasonForVisit':'Rfv',
     'VisitNote':'Vis'
 }
-folder = '/home/bwhbrain/Desktop/Text ML - McInerny'
-filename = 'GY6_20190130_094741_%s.txt'
+folder = '/home/jered/Documents/data/Dataset_10-11-2019'
+filename = 'GY6_20191002_190317_BWH_%s.txt'
 
 def preprocess_to_csv(folder, subfolder, filename, table, contains_report=False):
     with open(os.path.join(folder, filename % table), 'r') as infile:
@@ -50,15 +51,16 @@ code_files = set([
 def main():
     subfolder1 = 'PreprocessedTextFiles'
     subfolder2 = 'FinalPreprocessedData'
-    os.mkdir(os.path.join(folder, subfolder1))
-    for k,v in tables.items():
-        preprocess_to_csv(folder, subfolder1, filename, v, contains_report=k in report_files)
+    #os.mkdir(os.path.join(folder, subfolder1))
+    #for k,v in tables.items():
+    #    preprocess_to_csv(folder, subfolder1, filename, v, contains_report=k in report_files)
     df = {k:pd.read_csv(os.path.join(folder, subfolder1, filename % v), delimiter='|', lineterminator='\r') for k,v in tables.items()}
     os.mkdir(os.path.join(folder, subfolder2))
     text_columns = ['patient_id', 'date', 'report_type', 'description', 'text', 'from_table', 'other_info']
     text_rows = []
     for k in report_files:
-        for i,row in df[k].iterrows():
+        print(k)
+        for i,row in tqdm(df[k].iterrows(), total=len(df[k])):
             results = re.findall('\d+', str(row.EMPI))
             if len(results) == 1:
                 patient_id = int(results[0]) # this is the first one, so sometimes it has an extra newline at the beginning
@@ -70,12 +72,13 @@ def main():
             description = row.Report_Description
             text = row.Report_Text
             other_info = {'report_status':row.Report_Status}
-            text_rows.append([patient_id, date, report_type, description, text, report_type, from_table, other_info])
+            text_rows.append([patient_id, date, report_type, description, text, from_table, other_info])
     pd.DataFrame(text_rows, columns=text_columns).to_csv(os.path.join(folder, subfolder2, 'medical_reports.csv'), index=False)
     code_columns = ['patient_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table', 'other_info']
     code_rows = []
     for k in code_files:
-        for i,row in df[k].iterrows():
+        print(k)
+        for i,row in tqdm(df[k].iterrows(), total=len(df[k])):
             patient_id = row.EMPI
             # date = row.Date # TODO: make this into a number for sorting purposes
             date = pd.to_datetime(datetime.strptime(row.Date, '%m/%d/%Y'))
