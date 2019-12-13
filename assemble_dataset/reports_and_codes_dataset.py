@@ -44,23 +44,28 @@ class ReportsToCodes(MedicalPredictionDataset):
         target_list, skipped = patient.targets(code_mapping=code_mapping)
         targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency'])
         retreived = len(targets)
-        datapoints = []
         persistent_targets = targets[targets.frequency >= frequency_threshold].sort_values('date')
-        prev_patient_report_index = None
-        for i,target_row in persistent_targets.iterrows():
-            target_date = target_row.date
-            patient_reports = patient.compile_reports(before_date=target_date-pd.to_timedelta('1 day'))
-            if len(patient_reports) == 0 or patient_reports.index[-1] == prev_patient_report_index:
-                continue
-            prev_patient_report_index = patient_reports.index[-1]
-            negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
-            positive_targets = persistent_targets.target[persistent_targets.date >= target_date].tolist()
-            datapoints.append([patient_reports, positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
+        radiology_reports = patient.reports[patient.reports.report_type == "Radiology"]
+        if len(radiology_reports) == 0:
+            return [], skipped, retreived
+        target_date = radiology_reports.iloc[0].date
+        past_reports = patient.compile_reports(before_date=target_date-pd.to_timedelta('1 day'))
+        if len(past_reports) == 0:
+            return [], skipped, retreived
+        future_reports = patient.compile_reports(after_date=target_date, before_date=target_date+pd.to_timedelta(1, unit='Y'))
+        if len(future_reports) == 0:
+            return [], skipped, retreived
+        positive_targets = persistent_targets[(persistent_targets.date >= target_date)\
+                                            & (persistent_targets.date < target_date+pd.to_timedelta(1, unit='Y'))].target.tolist()
+        if len(positive_targets) == 0:
+            return [], skipped, retreived
+        negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
+        datapoints = [[past_reports, future_reports, positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)]]
         return datapoints, skipped, retreived
 
     @classmethod
     def columns(cls):
-        return ['reports', 'targets', 'labels']
+        return ['reports', 'future_reports', 'targets', 'labels']
 
     @classmethod
     def code_set(cls, codes, code_mapping=None):
