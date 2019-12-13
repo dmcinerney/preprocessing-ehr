@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from patient import Patient
+from .patient import Patient
 from random import shuffle
 import pandas as pd
 import os
@@ -11,13 +11,14 @@ def create_dataset(patient_ids, new_folder, reports):
     print("creating "+new_folder)
     os.mkdir(new_folder)
     for i,patient_id in tqdm(enumerate(patient_ids), total=len(patient_ids)):
-        report = Patient(patient_id, reports=reports).concatenate_reports()
+        report = Patient(patient_id, reports=reports).compile_reports()
+        report = ('\n\n[PAD]'*2).join([row.text for i,row in report.iterrows()])
         report += '\n\n[PAD]'*509
         with open(os.path.join(new_folder, 'patient_%i.txt' % patient_id), 'w') as f:
             f.write(report)
 
 
-if __name__ == '__main__':
+def main():
     parser = ArgumentParser()
     parser.add_argument("folder")
     args = parser.parse_args()
