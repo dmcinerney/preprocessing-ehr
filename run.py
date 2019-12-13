@@ -9,7 +9,7 @@ from icd_codes.radiology_codes import main as radiology_codes
 if __name__ == '__main__':
 #    make_reports_codes_aligned()
 #    unify_bwh()
-#    make_reports_codes()
+    make_reports_codes()
 #    radiology_codes()
 #    process_codes()
 #    make_reports_seq()
