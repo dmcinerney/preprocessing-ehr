@@ -16,52 +16,74 @@ class MedicalPredictionDataset:
     def create(cls, patient_ids, reports, codes, code_mapping=None):
         data = []
         iterator = tqdm(patient_ids, total=len(patient_ids))
-        total_skipped, total_retrieved, total_num_datapoints = 0, 0, 0
+        counts = cls.init_count_dict()
         for patient_id in iterator:
-            datapoints, skipped, retrieved = cls.get_datapoints(reports, codes, patient_id, code_mapping=code_mapping)
+            datapoints = cls.get_datapoints(reports, codes, patient_id, counts=counts, code_mapping=code_mapping)
             data.extend(datapoints)
-            total_skipped += skipped
-            total_retrieved += retrieved
-            total_num_datapoints += len(datapoints)
-            iterator.set_postfix({'skipped':total_skipped,
-                                  'retrieved':total_retrieved,
-                                  'num_datapoints':total_num_datapoints})
+            counts['num_datapoints'] += len(datapoints)
+            iterator.set_postfix(counts)
         return pd.DataFrame(data, columns=cls.columns())
+
+    @classmethod
+    def update_counts(cls, counts, k, v):
+        if counts is not None:
+            counts[k] += v
+
+    @classmethod
+    def init_count_dict(cls):
+        return {'num_datapoints':0}
 
     @classmethod
     def columns(cls):
         raise NotImplementedError
 
     @classmethod
-    def get_datapoints(cls, reports, codes, patient_id):
+    def get_datapoints(cls, reports, codes, patient_id, counts=None):
         raise NotImplementedError
 
 class ReportsToCodes(MedicalPredictionDataset):
     @classmethod
-    def get_datapoints(cls, reports, codes, patient_id, code_mapping=None, frequency_threshold=3):
+    def get_datapoints(cls, reports, codes, patient_id, counts=None, code_mapping=None, frequency_threshold=3):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
         patient = Patient(patient_id, reports=reports, codes=codes)
         target_list, skipped = patient.targets(code_mapping=code_mapping)
+        cls.update_counts(counts, 'skipped', skipped)
         targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency'])
-        retreived = len(targets)
+        cls.update_counts(counts, 'retreived', len(targets))
         persistent_targets = targets[targets.frequency >= frequency_threshold].sort_values('date')
         radiology_reports = patient.reports[patient.reports.report_type == "Radiology"]
         if len(radiology_reports) == 0:
-            return [], skipped, retreived
-        target_date = radiology_reports.iloc[0].date
-        past_reports = patient.compile_reports(before_date=target_date-pd.to_timedelta('1 day'))
-        if len(past_reports) == 0:
-            return [], skipped, retreived
-        future_reports = patient.compile_reports(after_date=target_date, before_date=target_date+pd.to_timedelta(1, unit='Y'))
-        if len(future_reports) == 0:
-            return [], skipped, retreived
-        positive_targets = persistent_targets[(persistent_targets.date >= target_date)\
-                                            & (persistent_targets.date < target_date+pd.to_timedelta(1, unit='Y'))].target.tolist()
-        if len(positive_targets) == 0:
-            return [], skipped, retreived
-        negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
-        datapoints = [[past_reports, future_reports, positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)]]
-        return datapoints, skipped, retreived
+            cls.update_counts(counts, 'no_radiology_reports', 1)
+            return []
+        datapoints = []
+        for i,row in radiology_reports.iterrows():
+            target_date = row.date
+            past_reports = patient.compile_reports(before_date=target_date-pd.to_timedelta('1 day'))
+            if len(past_reports) == 0:
+                cls.update_counts(counts, 'no_past_reports', 1)
+                continue
+            future_reports = patient.compile_reports(after_date=target_date, before_date=target_date+pd.to_timedelta(1, unit='Y'))
+            if len(future_reports) == 0:
+                cls.update_counts(counts, 'no_future_reports', 1)
+                continue
+            positive_targets = persistent_targets[(persistent_targets.date >= target_date)\
+                                                & (persistent_targets.date < target_date+pd.to_timedelta(1, unit='Y'))].target.tolist()
+            if len(positive_targets) == 0:
+                cls.update_counts(counts, 'no_pos_targets', 1)
+                continue
+            negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
+            datapoints.append([past_reports, future_reports, positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
+        return datapoints
+
+    @classmethod
+    def init_count_dict(cls):
+        return {**MedicalPredictionDataset.init_count_dict(),
+                'skipped':0,
+                'retreived':0,
+                'no_radiology_reports':0,
+                'no_past_reports':0,
+                'no_future_reports':0,
+                'no_pos_targets':0,}
 
     @classmethod
     def columns(cls):
