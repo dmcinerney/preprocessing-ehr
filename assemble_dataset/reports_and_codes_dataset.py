@@ -72,7 +72,7 @@ class ReportsToCodes(MedicalPredictionDataset):
                 cls.update_counts(counts, 'no_pos_targets', 1)
                 continue
             negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
-            datapoints.append([past_reports, future_reports, positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
+            datapoints.append([past_reports.applymap(str).to_dict(), future_reports.applymap(str).to_dict(), positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
         return datapoints
 
     @classmethod
@@ -109,6 +109,15 @@ def get_counts(dataset):
             counts[key][row.labels[j]] += 1
     return counts
 
+
+def to_file(df, file, blocksize=10):
+    print("saving to "+file)
+    pbar = tqdm(total=len(df))
+    for i in range(0, len(df), blocksize):
+        df[i:i+blocksize].to_csv(file, index=False, header=i==0, mode='a', compression='gzip')
+        #df[i:i+blocksize].to_json(file, orient='records', lines=True, compression='gzip', date_format="iso", mode='a')
+        pbar.update(n=len(df[i:i+blocksize]))
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("folder")
@@ -135,13 +144,19 @@ def main():
     threshold = 50
     useless_codes = set([k for k,v in counts.items() if v[0] < threshold or v[1] < threshold])
     print('useless codes:', useless_codes)
-    print('usefull codes:', set(counts.keys()).difference(useless_codes))
+    usefull_codes = set(counts.keys()).difference(useless_codes)
+    with open(os.path.join(new_folder, 'used_targets.txt'), 'w') as f:
+        f.write(str(list(usefull_codes)))
+    print('usefull codes:', usefull_codes)
     for k,v in code_mapping.items():
         if v in useless_codes:
             code_mapping[k] = None
     train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping)
-    train_dataset.to_json(os.path.join(new_folder, 'train.data'), orient='records', lines=True, compression='gzip', date_format="iso")
+    #train_dataset.to_json(os.path.join(new_folder, 'train.data'), orient='records', lines=True, compression='gzip', date_format="iso")
+    to_file(train_dataset, os.path.join(new_folder, 'train.data'))
     val_dataset = ReportsToCodes.create(patient_ids[div1:div2], reports, codes, code_mapping=code_mapping)
-    val_dataset.to_json(os.path.join(new_folder, 'val.data'), orient='records', lines=True, compression='gzip', date_format="iso")
+    #val_dataset.to_json(os.path.join(new_folder, 'val.data'), orient='records', lines=True, compression='gzip', date_format="iso")
+    to_file(val_dataset, os.path.join(new_folder, 'val.data'))
     test_dataset = ReportsToCodes.create(patient_ids[div2:], reports, codes, code_mapping=code_mapping)
-    test_dataset.to_json(os.path.join(new_folder, 'test.data'), orient='records', lines=True, compression='gzip', date_format="iso")
+    #test_dataset.to_json(os.path.join(new_folder, 'test.data'), orient='records', lines=True, compression='gzip', date_format="iso")
+    to_file(test_dataset, os.path.join(new_folder, 'test.data'))
