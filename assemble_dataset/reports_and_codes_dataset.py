@@ -118,8 +118,8 @@ def main():
         if v in useless_codes:
             code_mapping[k] = None
     train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping)
-    train_dataset.to_json(os.path.join(new_folder, 'train.data'), orient='records', lines=True, compression='gzip')
+    train_dataset.to_json(os.path.join(new_folder, 'train.data'), orient='records', lines=True, compression='gzip', date_format="iso")
     val_dataset = ReportsToCodes.create(patient_ids[div1:div2], reports, codes, code_mapping=code_mapping)
-    val_dataset.to_json(os.path.join(new_folder, 'val.data'), orient='records', lines=True, compression='gzip')
+    val_dataset.to_json(os.path.join(new_folder, 'val.data'), orient='records', lines=True, compression='gzip', date_format="iso")
     test_dataset = ReportsToCodes.create(patient_ids[div2:], reports, codes, code_mapping=code_mapping)
-    test_dataset.to_json(os.path.join(new_folder, 'test.data'), orient='records', lines=True, compression='gzip')
+    test_dataset.to_json(os.path.join(new_folder, 'test.data'), orient='records', lines=True, compression='gzip', date_format="iso")
