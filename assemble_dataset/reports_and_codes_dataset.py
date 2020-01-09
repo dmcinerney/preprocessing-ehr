@@ -1,3 +1,4 @@
+import copy
 import pandas as pd
 import numpy as np
 import os
@@ -13,12 +14,12 @@ from assemble_dataset.patient import Patient
 class MedicalPredictionDataset:
     # saves to files in a folder called name
     @classmethod
-    def create(cls, patient_ids, reports, codes, code_mapping=None):
+    def create(cls, patient_ids, reports, codes, code_mapping=None, code_graph=None):
         data = []
         iterator = tqdm(patient_ids, total=len(patient_ids))
         counts = cls.init_count_dict()
         for patient_id in iterator:
-            datapoints = cls.get_datapoints(reports, codes, patient_id, counts=counts, code_mapping=code_mapping)
+            datapoints = cls.get_datapoints(reports, codes, patient_id, counts=counts, code_mapping=code_mapping, code_graph=code_graph)
             data.extend(datapoints)
             counts['num_datapoints'] += len(datapoints)
             iterator.set_postfix(counts)
@@ -43,7 +44,7 @@ class MedicalPredictionDataset:
 
 class ReportsToCodes(MedicalPredictionDataset):
     @classmethod
-    def get_datapoints(cls, reports, codes, patient_id, counts=None, code_mapping=None, frequency_threshold=2):
+    def get_datapoints(cls, reports, codes, patient_id, counts=None, code_mapping=None, code_graph=None, frequency_threshold=2):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
         patient = Patient(patient_id, reports=reports, codes=codes)
         target_list, skipped = patient.targets(code_mapping=code_mapping)
@@ -59,12 +60,14 @@ class ReportsToCodes(MedicalPredictionDataset):
         #for i,row in radiology_reports.iterrows():
         #    target_date = row.date
         for i,row in persistent_targets.iterrows():
-            past_radiology_report_dates = radiology_reports.date[radiology_reports.date <= row.date]
+            past_radiology_report_dates = radiology_reports.date[radiology_reports.date <= row.date-pd.to_timedelta('1 day')]
             if len(past_radiology_report_dates) == 0:
                 cls.update_counts(counts, 'no_past_reports', 1)
                 continue
             target_date = past_radiology_report_dates.iloc[-1]
-            past_reports = patient.compile_reports(before_date=target_date-pd.to_timedelta('1 day'))
+            if target_date+pd.to_timedelta(1, unit='Y') < row.date:
+                cls.update_counts(counts, 'no_recent_reports', 1)
+            past_reports = patient.compile_reports(before_date=target_date)
             if len(past_reports) == 0:
                 cls.update_counts(counts, 'no_past_reports', 1)
                 continue
@@ -77,9 +80,21 @@ class ReportsToCodes(MedicalPredictionDataset):
             if len(positive_targets) == 0:
                 cls.update_counts(counts, 'no_pos_targets', 1)
                 continue
-            negative_targets = list(code_set.difference(set(persistent_targets.target.tolist())))
+            # TODO: be careful with this, cannot set code that is an ancestor of a positive code to negative!
+            persistent_and_ancestors = cls.ancestors(persistent_targets.target.tolist(), code_graph) if code_graph is not None else persistent_targets.target.tolist()
+            negative_targets = list(code_set.difference(set(persistent_and_ancestors)))
             datapoints.append([past_reports.applymap(str).to_dict(), future_reports.applymap(str).to_dict(), positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
         return datapoints
+
+    @classmethod
+    def ancestors(cls, nodes, graph):
+        nodes = copy.deepcopy(nodes)
+        for node in nodes:
+            if graph.in_degree(node) > 0:
+                pred = next(iter(graph.predecessors(node)))
+                if pred not in nodes and graph.in_degree(pred) > 0:
+                    nodes.append(pred)
+        return nodes
 
     @classmethod
     def init_count_dict(cls):
@@ -88,6 +103,7 @@ class ReportsToCodes(MedicalPredictionDataset):
                 'retreived':0,
                 'no_radiology_reports':0,
                 'no_past_reports':0,
+                'no_recent_reports':0,
                 'no_future_reports':0,
                 'no_pos_targets':0,}
 
@@ -129,6 +145,7 @@ def main():
     parser.add_argument("folder")
     parser.add_argument("dataset_name")
     parser.add_argument("--code_mapping")
+    parser.add_argument("--code_graph")
     args = parser.parse_args()
     reports = pd.read_csv(os.path.join(args.folder, 'medical_reports.csv'), parse_dates=['date'])
     codes = pd.read_csv(os.path.join(args.folder, 'medical_codes.csv'), parse_dates=['date'])
@@ -137,13 +154,18 @@ def main():
             code_mapping = pkl.load(f)
     else:
         code_mapping = None
+    if args.code_graph is not None:
+        with open(args.code_graph, 'rb') as f:
+            code_graph = pkl.load(f)
+    else:
+        code_graph = None
     patient_ids = list(set(reports.patient_id))
     shuffle(patient_ids)
     div1 = int(len(patient_ids)*.7)
     div2 = int(len(patient_ids)*.85)
     new_folder = os.path.join(args.folder, args.dataset_name)
     os.mkdir(new_folder)
-    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping)
+    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
     counts = get_counts(train_dataset)
     with open(os.path.join(new_folder, 'counts.pkl'), 'wb') as f:
         pkl.dump(counts, f)
@@ -158,12 +180,12 @@ def main():
     for k,v in code_mapping.items():
         if v in useless_codes:
             code_mapping[k] = None
-    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping)
+    train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
     #train_dataset.to_json(os.path.join(new_folder, 'train.data'), orient='records', lines=True, compression='gzip', date_format="iso")
     to_file(train_dataset, os.path.join(new_folder, 'train.data'))
-    val_dataset = ReportsToCodes.create(patient_ids[div1:div2], reports, codes, code_mapping=code_mapping)
+    val_dataset = ReportsToCodes.create(patient_ids[div1:div2], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
     #val_dataset.to_json(os.path.join(new_folder, 'val.data'), orient='records', lines=True, compression='gzip', date_format="iso")
     to_file(val_dataset, os.path.join(new_folder, 'val.data'))
-    test_dataset = ReportsToCodes.create(patient_ids[div2:], reports, codes, code_mapping=code_mapping)
+    test_dataset = ReportsToCodes.create(patient_ids[div2:], reports, codes, code_mapping=code_mapping, code_graph=code_graph)
     #test_dataset.to_json(os.path.join(new_folder, 'test.data'), orient='records', lines=True, compression='gzip', date_format="iso")
     to_file(test_dataset, os.path.join(new_folder, 'test.data'))
