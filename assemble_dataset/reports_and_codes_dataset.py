@@ -67,6 +67,7 @@ class ReportsToCodes(MedicalPredictionDataset):
             target_date = past_radiology_report_dates.iloc[-1]
             if target_date+pd.to_timedelta(1, unit='Y') < row.date:
                 cls.update_counts(counts, 'no_recent_reports', 1)
+                continue
             past_reports = patient.compile_reports(before_date=target_date)
             if len(past_reports) == 0:
                 cls.update_counts(counts, 'no_past_reports', 1)
@@ -77,6 +78,7 @@ class ReportsToCodes(MedicalPredictionDataset):
                 continue
             positive_targets = persistent_targets[(persistent_targets.date >= target_date)\
                                                 & (persistent_targets.date < target_date+pd.to_timedelta(1, unit='Y'))].target.tolist()
+            # TODO: check that this should be zero
             if len(positive_targets) == 0:
                 cls.update_counts(counts, 'no_pos_targets', 1)
                 continue
@@ -159,7 +161,7 @@ def main():
             code_graph = pkl.load(f)
     else:
         code_graph = None
-    patient_ids = list(set(reports.patient_id))
+    patient_ids = list(set(reports.patient_id))[:200]
     shuffle(patient_ids)
     div1 = int(len(patient_ids)*.7)
     div2 = int(len(patient_ids)*.85)
