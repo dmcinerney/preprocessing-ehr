@@ -43,7 +43,7 @@ class MedicalPredictionDataset:
 
 class ReportsToCodes(MedicalPredictionDataset):
     @classmethod
-    def get_datapoints(cls, reports, codes, patient_id, counts=None, code_mapping=None, frequency_threshold=3):
+    def get_datapoints(cls, reports, codes, patient_id, counts=None, code_mapping=None, frequency_threshold=2):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
         patient = Patient(patient_id, reports=reports, codes=codes)
         target_list, skipped = patient.targets(code_mapping=code_mapping)
@@ -56,8 +56,14 @@ class ReportsToCodes(MedicalPredictionDataset):
             cls.update_counts(counts, 'no_radiology_reports', 1)
             return []
         datapoints = []
-        for i,row in radiology_reports.iterrows():
-            target_date = row.date
+        #for i,row in radiology_reports.iterrows():
+        #    target_date = row.date
+        for i,row in persistent_targets.iterrows():
+            past_radiology_report_dates = radiology_reports.date[radiology_reports.date <= row.date]
+            if len(past_radiology_report_dates) == 0:
+                cls.update_counts(counts, 'no_past_reports', 1)
+                continue
+            target_date = past_radiology_report_dates.iloc[-1]
             past_reports = patient.compile_reports(before_date=target_date-pd.to_timedelta('1 day'))
             if len(past_reports) == 0:
                 cls.update_counts(counts, 'no_past_reports', 1)
@@ -110,7 +116,7 @@ def get_counts(dataset):
     return counts
 
 
-def to_file(df, file, blocksize=10):
+def to_file(df, file, blocksize=1000):
     print("saving to "+file)
     pbar = tqdm(total=len(df))
     for i in range(0, len(df), blocksize):
@@ -121,6 +127,7 @@ def to_file(df, file, blocksize=10):
 def main():
     parser = ArgumentParser()
     parser.add_argument("folder")
+    parser.add_argument("dataset_name")
     parser.add_argument("--code_mapping")
     args = parser.parse_args()
     reports = pd.read_csv(os.path.join(args.folder, 'medical_reports.csv'), parse_dates=['date'])
@@ -134,14 +141,14 @@ def main():
     shuffle(patient_ids)
     div1 = int(len(patient_ids)*.7)
     div2 = int(len(patient_ids)*.85)
-    new_folder = os.path.join(args.folder, 'reports_and_codes')
+    new_folder = os.path.join(args.folder, args.dataset_name)
     os.mkdir(new_folder)
     train_dataset = ReportsToCodes.create(patient_ids[:div1], reports, codes, code_mapping=code_mapping)
     counts = get_counts(train_dataset)
     with open(os.path.join(new_folder, 'counts.pkl'), 'wb') as f:
         pkl.dump(counts, f)
     print(counts)
-    threshold = 50
+    threshold = 0
     useless_codes = set([k for k,v in counts.items() if v[0] < threshold or v[1] < threshold])
     print('useless codes:', useless_codes)
     usefull_codes = set(counts.keys()).difference(useless_codes)

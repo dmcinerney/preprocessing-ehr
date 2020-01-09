@@ -2,14 +2,20 @@ import pandas as pd
 import pickle as pkl
 import networkx as nx
 from networkx.algorithms.traversal.depth_first_search import dfs_postorder_nodes
-from networkx.classes.function import set_node_attributes
+from networkx.classes.function import set_node_attributes, subgraph
 from tqdm import tqdm
 
 outline_file = 'icd_codes/radiology_codes_outline.txt'
+outline_type = 'ICD9'
 original_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping.pkl'
 original_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph.pkl'
-new_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping_radiology.pkl'
-new_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph_radiology.pkl'
+expanded = True
+if expanded:
+    new_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping_radiology_expanded.pkl'
+    new_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph_radiology_expanded.pkl'
+else:
+    new_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping_radiology.pkl'
+    new_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph_radiology.pkl'
 
 def create_graph(filename):
     G = nx.DiGraph()
@@ -70,29 +76,69 @@ def getids(nodename):
     else:
         return [nodename]
 
-def create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, only_leaf_codes=True):
-    new_code_mapping = {}
-    node_codes = {}
-    df = pd.DataFrame(list(original_code_mapping.keys()))
-    postorder = dfs_postorder_nodes(G, source='<start_node>')
-    for n in tqdm(postorder, total=len(G.nodes)):
-        node_codes[n] = {'codes':set()}
-        if only_leaf_codes and len(G[n]) != 0:
-            continue
-        if not any(char.isdigit() for char in n):
-            continue
-        ids = getids(n)
+def get_codes_under_category(n, df, original_G, original_code_mapping, outline_type=None):
+    ids = getids(n)
+    if outline_type is None:
+        # auto decide if icd 9 or 10
         codes9 = []
         codes10 = []
         for i in ids:
             codes9 += list(df[0][df[0].str.startswith(str(('ICD9', i))[:-2])])
             codes10 += list(df[0][df[0].str.startswith(str(('ICD10', i))[:-2])])
         if len(codes10) > 0 and len(codes10) > len(codes9):
-            codes = codes10
+            type = 'ICD10'
         elif len(codes9) > 0:
-            codes = codes9
+            type = 'ICD9'
         else:
+            return None
+    else:
+        type = outline_type
+        if type == 'ICD9':
+            codes9 = []
+            for i in ids:
+                codes9 += list(df[0][df[0].str.startswith(str(('ICD9', i))[:-2])])
+    if type == 'ICD10':
+        codes = []
+        for i in ids:
+            codes += [code for code in original_G.nodes if code.startswith(str(('ICD10', i))[:-2])]
+    elif type == 'ICD9':
+        codes = [original_code_mapping[code] for code in codes9]
+    return codes
+
+def create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, only_leaf_codes=True, expanded=False, outline_type=None):
+    new_code_mapping = {}
+    df = pd.DataFrame(list(original_code_mapping.keys()))
+    postorder = dfs_postorder_nodes(G, source='<start_node>')
+    for n in tqdm(postorder, total=len(G.nodes)):
+        if only_leaf_codes and len(G[n]) != 0:
             continue
+        if not any(char.isdigit() for char in n):
+            continue
+        codes = get_codes_under_category(n, df, original_G, original_code_mapping, outline_type=outline_type)
+        if codes is None: continue
+        codes = sorted(codes, key=lambda x: len(x))
+        node_subset = set()
+        for code in codes:
+            if code in node_subset:
+                continue
+            node_subset.add(code)
+            node_subset = node_subset.union(nx.descendants(original_G, code))
+        for node in node_subset:
+            if expanded:
+                new_code_mapping[node] = node
+                pred = next(original_G.predecessors(node))
+                if pred in node_subset:
+                    G.add_edge(pred, node)
+                else:
+                    G.add_edge(n, node)
+                if 'description' in original_G.nodes[node].keys():
+                    G.nodes[node]['description'] = original_G.nodes[node]['description']
+            else:
+                new_code_mapping[node] = n
+                if 'codes' not in G.nodes[n].keys():
+                    G.nodes[n]['codes'] = set()
+                G.nodes[n]['codes'].add(node)
+        """
         for code in codes:
             code = original_code_mapping[code]
             new_code_mapping[code] = n
@@ -100,8 +146,7 @@ def create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, on
             for descendant in nx.descendants(original_G, code):
                 new_code_mapping[descendant] = n
                 node_codes[n]['codes'].add(descendant)
-    set_node_attributes(G, node_codes)
-    import pdb; pdb.set_trace()
+        """
     for k,v in original_code_mapping.items():
         if v not in new_code_mapping.keys():
             new_code_mapping[k] = None
@@ -109,13 +154,25 @@ def create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, on
             new_code_mapping[k] = new_code_mapping[v]
     return new_code_mapping
 
+def depth(G, n):
+    count = 0
+    preds = list(G.predecessors(n))
+    while len(preds) > 0:
+        n = next(iter(preds))
+        preds = list(G.predecessors(n))
+        count += 1
+    return count
+
 def main():
     with open(original_code_mapping_file, 'rb') as f:
         original_code_mapping = pkl.load(f)
     with open(original_code_graph_file, 'rb') as f:
         original_G = pkl.load(f)
     G = create_graph(outline_file)
-    new_code_mapping = create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping)
+    import pdb; pdb.set_trace()
+    new_code_mapping = create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, expanded=expanded, outline_type=outline_type)
+    print([depth(G, n) for n in G.nodes])
+    import pdb; pdb.set_trace()
     with open(new_code_mapping_file, 'wb') as f:
         pkl.dump(new_code_mapping, f)
     with open(new_code_graph_file, 'wb') as f:

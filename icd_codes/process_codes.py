@@ -49,7 +49,8 @@ def main():
             print("WARNING: %s has no corresponding icd10 code, it is not being included in the mapping" % row.code)
             continue
         code_mapping[str(('ICD9', row.code))] = str(('ICD10', icd10code))
-        create_node_and_parents(G, code_mapping, icd10code)
+        if str(('ICD10', icd10code)) not in G.nodes:
+            create_node_and_parents(G, code_mapping, icd10code)
     with open(code_mapping_file, 'wb') as f:
         pkl.dump(code_mapping, f)
     with open(code_graph_file, 'wb') as f:
