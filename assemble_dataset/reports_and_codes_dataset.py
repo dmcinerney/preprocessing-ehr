@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 import pandas as pd
 import pickle as pkl
 from tqdm import tqdm
-from random import shuffle
+import random
 from assemble_dataset.patient import Patient
 
 
@@ -49,9 +49,9 @@ class ReportsToCodes(MedicalPredictionDataset):
         patient = Patient(patient_id, reports=reports, codes=codes)
         target_list, skipped = patient.targets(code_mapping=code_mapping)
         cls.update_counts(counts, 'skipped', skipped)
-        targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency'])
+        targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency']).sort_values('date')
         cls.update_counts(counts, 'retreived', len(targets))
-        persistent_targets = targets[targets.frequency >= frequency_threshold].sort_values('date')
+        persistent_targets = targets[targets.frequency >= frequency_threshold]
         radiology_reports = patient.reports[patient.reports.report_type == "Radiology"]
         if len(radiology_reports) == 0:
             cls.update_counts(counts, 'no_radiology_reports', 1)
@@ -59,12 +59,17 @@ class ReportsToCodes(MedicalPredictionDataset):
         datapoints = []
         #for i,row in radiology_reports.iterrows():
         #    target_date = row.date
+        prev_target_date_index = -1
         for i,row in persistent_targets.iterrows():
             past_radiology_report_dates = radiology_reports.date[radiology_reports.date <= row.date-pd.to_timedelta('1 day')]
             if len(past_radiology_report_dates) == 0:
                 cls.update_counts(counts, 'no_past_reports', 1)
                 continue
             target_date = past_radiology_report_dates.iloc[-1]
+            if prev_target_date_index == past_radiology_report_dates.index[-1]:
+                cls.update_counts(counts, 'same_target_date', 1)
+                continue
+            prev_target_date_index = past_radiology_report_dates.index[-1]
             if target_date+pd.to_timedelta(1, unit='Y') < row.date:
                 cls.update_counts(counts, 'no_recent_reports', 1)
                 continue
@@ -78,25 +83,39 @@ class ReportsToCodes(MedicalPredictionDataset):
                 continue
             positive_targets = persistent_targets[(persistent_targets.date >= target_date)\
                                                 & (persistent_targets.date < target_date+pd.to_timedelta(1, unit='Y'))].target.tolist()
+            if code_graph is not None:
+                positive_targets = cls.ancestors(code_graph, positive_targets)
             # TODO: check that this should be zero
             if len(positive_targets) == 0:
                 cls.update_counts(counts, 'no_pos_targets', 1)
                 continue
-            # TODO: be careful with this, cannot set code that is an ancestor of a positive code to negative!
-            persistent_and_ancestors = cls.ancestors(persistent_targets.target.tolist(), code_graph) if code_graph is not None else persistent_targets.target.tolist()
-            negative_targets = list(code_set.difference(set(persistent_and_ancestors)))
-            datapoints.append([past_reports.applymap(str).to_dict(), future_reports.applymap(str).to_dict(), positive_targets+negative_targets, [1]*len(positive_targets)+[0]*len(negative_targets)])
+            not_negative_nodes = set(cls.ancestors(code_graph, persistent_targets.target.tolist())
+                                      if code_graph is not None else persistent_targets.target.tolist())
+            negative_targets = list(cls.ancestors(code_graph, list(code_set), stop_nodes=not_negative_nodes)
+                                    if code_graph is not None else code_set.difference(not_negative_nodes))
+            previous_targets = targets[(targets.date < target_date)\
+                                     & (targets.date >= past_radiology_report_dates.iloc[0])]
+            datapoints.append([
+                past_reports.applymap(str).to_dict(),
+                future_reports.applymap(str).to_dict(),
+                positive_targets+negative_targets,
+                [1]*len(positive_targets)+[0]*len(negative_targets),
+                previous_targets.applymap(str).to_dict()])
         return datapoints
 
     @classmethod
-    def ancestors(cls, nodes, graph):
-        nodes = copy.deepcopy(nodes)
-        for node in nodes:
-            if graph.in_degree(node) > 0:
-                pred = next(iter(graph.predecessors(node)))
-                if pred not in nodes and graph.in_degree(pred) > 0:
-                    nodes.append(pred)
-        return nodes
+    def ancestors(cls, graph, nodes, stop_nodes=set()):
+        node_stack = copy.deepcopy(nodes)
+        new_nodes = set()
+        while len(node_stack) > 0:
+            node = node_stack.pop()
+            if node in stop_nodes: continue # don't add stop nodes
+            if node in new_nodes: continue # don't add nodes already there
+            in_degree = graph.in_degree(node)
+            if in_degree == 0: continue # don't add the start node
+            new_nodes.add(node)
+            node_stack.extend(list(graph.predecessors(node)))
+        return list(new_nodes)
 
     @classmethod
     def init_count_dict(cls):
@@ -105,13 +124,14 @@ class ReportsToCodes(MedicalPredictionDataset):
                 'retreived':0,
                 'no_radiology_reports':0,
                 'no_past_reports':0,
+                'same_target_date':0,
                 'no_recent_reports':0,
                 'no_future_reports':0,
                 'no_pos_targets':0,}
 
     @classmethod
     def columns(cls):
-        return ['reports', 'future_reports', 'targets', 'labels']
+        return ['reports', 'future_reports', 'targets', 'labels', 'previous_targets']
 
     @classmethod
     def code_set(cls, codes, code_mapping=None):
@@ -161,8 +181,9 @@ def main():
             code_graph = pkl.load(f)
     else:
         code_graph = None
-    patient_ids = list(set(reports.patient_id))[:200]
-    shuffle(patient_ids)
+    patient_ids = list(set(reports.patient_id))
+    random.seed(0)
+    random.shuffle(patient_ids)
     div1 = int(len(patient_ids)*.7)
     div2 = int(len(patient_ids)*.85)
     new_folder = os.path.join(args.folder, args.dataset_name)
