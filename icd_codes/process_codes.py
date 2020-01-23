@@ -27,6 +27,8 @@ def create_node_and_parents(G, code_mapping, code, description=None):
     code_mapping['curr_node'] = curr_node
     for l in range(len(code)-1,-1,-1):
         parent = str(('ICD10', code[:l]))
+        if parent not in G.nodes:
+            G.add_node(parent, description=None)
         G.add_edge(parent, curr_node)
         curr_node = parent
 

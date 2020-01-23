@@ -48,6 +48,13 @@ class ReportsToCodes(MedicalPredictionDataset):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
         patient = Patient(patient_id, reports=reports, codes=codes)
         target_list, skipped = patient.targets(code_mapping=code_mapping)
+        target_dates = {}
+        for leaf_target,rows in target_list:
+            for target in (cls.ancestors(code_graph, [leaf_target]) if code_graph is not None else [leaf_target]):
+                if target not in target_dates.keys():
+                    target_dates[target] = []
+                target_dates[target].extend([row.date for i,row in rows.iterrows()])
+        target_dates = {target:pd.Series(sorted(list(set(dates)))) for target,dates in target_dates.items()}
         cls.update_counts(counts, 'skipped', skipped)
         targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency']).sort_values('date')
         cls.update_counts(counts, 'retreived', len(targets))
@@ -93,14 +100,15 @@ class ReportsToCodes(MedicalPredictionDataset):
                                       if code_graph is not None else persistent_targets.target.tolist())
             negative_targets = list(cls.ancestors(code_graph, list(code_set), stop_nodes=not_negative_nodes)
                                     if code_graph is not None else code_set.difference(not_negative_nodes))
-            previous_targets = targets[(targets.date < target_date)\
-                                     & (targets.date >= past_radiology_report_dates.iloc[0])]
+            previous_targets = {target:dates[(dates < target_date)\
+                                           & (dates >= past_radiology_report_dates.iloc[0])].apply(str).to_list() for target,dates in target_dates.items()}
+            previous_targets = {target:dates for target,dates in previous_targets.items() if len(dates) > 0}
             datapoints.append([
                 past_reports.applymap(str).to_dict(),
                 future_reports.applymap(str).to_dict(),
                 positive_targets+negative_targets,
                 [1]*len(positive_targets)+[0]*len(negative_targets),
-                previous_targets.applymap(str).to_dict()])
+                previous_targets])
         return datapoints
 
     @classmethod
@@ -113,6 +121,7 @@ class ReportsToCodes(MedicalPredictionDataset):
             if node in new_nodes: continue # don't add nodes already there
             in_degree = graph.in_degree(node)
             if in_degree == 0: continue # don't add the start node
+            elif in_degree > 1: raise Exception # shouldn't have any nodes with more than one parent
             new_nodes.add(node)
             node_stack.extend(list(graph.predecessors(node)))
         return list(new_nodes)

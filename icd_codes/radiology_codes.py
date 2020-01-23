@@ -40,10 +40,14 @@ def create_graph(filename):
                 nodename = linesplit[indices[0]]
                 del linesplit[indices[0]]
                 description = ' '.join(linesplit)
-                G.add_node(nodename, description=description)
             else:
                 nodename = line.strip()
-                G.add_node(nodename)
+                description = None
+            if nodename in G.nodes:
+                print("NEED TO DEBUG OUTLINE! MORE THAN ONE OCCURANCE OF THE SAME NODE")
+                import pdb; pdb.set_trace()
+                raise Exception
+            G.add_node(nodename, description=description)
             current_nodes_at_each_depth[new_tab_level] = nodename
             if new_tab_level == 0:
                 G.add_edge(start_node, nodename)
@@ -90,7 +94,7 @@ def get_codes_under_category(n, df, original_G, original_code_mapping, outline_t
         elif len(codes9) > 0:
             type = 'ICD9'
         else:
-            return None
+            return []
     else:
         type = outline_type
         if type == 'ICD9':
@@ -103,26 +107,46 @@ def get_codes_under_category(n, df, original_G, original_code_mapping, outline_t
             codes += [code for code in original_G.nodes if code.startswith(str(('ICD10', i))[:-2])]
     elif type == 'ICD9':
         codes = [original_code_mapping[code] for code in codes9]
+    #if len(codes) == 0: import pdb; pdb.set_trace()
     return codes
 
-def create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, only_leaf_codes=True, expanded=False, outline_type=None):
+def non_terminal_leaf_node(G, n):
+    print("leaf node: %s has no ICD code children! Deleting nodes on this branch until a non-leaf node is hit!" % n)
+    curr_node = n
+    while G.out_degree(curr_node) == 0:
+        parents = list(G.predecessors(curr_node))
+        G.remove_node(curr_node)
+        if len(parents) == 1:
+            curr_node = parents[0]
+        elif len(parents) == 0: break
+        elif len(parents) > 1: raise Exception
+
+def create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, only_leaves=False, expanded=False, outline_type=None):
     new_code_mapping = {}
     df = pd.DataFrame(list(original_code_mapping.keys()))
-    postorder = dfs_postorder_nodes(G, source='<start_node>')
-    for n in tqdm(postorder, total=len(G.nodes)):
-        if only_leaf_codes and len(G[n]) != 0:
+    postorder = list(dfs_postorder_nodes(G, source='<start_node>'))
+    for n in tqdm(postorder, total=len(postorder)):
+        if only_leaves and G.out_degree(n) != 0:
             continue
         if not any(char.isdigit() for char in n):
-            continue
+            raise Exception
         codes = get_codes_under_category(n, df, original_G, original_code_mapping, outline_type=outline_type)
-        if codes is None: continue
+        if G.out_degree(n) == 0 and len(codes) == 0:
+            non_terminal_leaf_node(G, n)
+            continue
         codes = sorted(codes, key=lambda x: len(x))
         node_subset = set()
         for code in codes:
             if code in node_subset:
                 continue
+            if code in G.nodes:
+                print("conflict during %s: %s -> %s already exists!" % (n, next(iter(G.predecessors(code))), code))
+                continue
             node_subset.add(code)
             node_subset = node_subset.union(nx.descendants(original_G, code))
+        if G.out_degree(n) == 0 and len(node_subset) == 0:
+            non_terminal_leaf_node(G, n)
+            continue
         for node in node_subset:
             if expanded:
                 new_code_mapping[node] = node
@@ -131,8 +155,7 @@ def create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, on
                     G.add_edge(pred, node)
                 else:
                     G.add_edge(n, node)
-                if 'description' in original_G.nodes[node].keys():
-                    G.nodes[node]['description'] = original_G.nodes[node]['description']
+                G.nodes[node]['description'] = original_G.nodes[node]['description']
             else:
                 new_code_mapping[node] = n
                 if 'codes' not in G.nodes[n].keys():
@@ -169,10 +192,10 @@ def main():
     with open(original_code_graph_file, 'rb') as f:
         original_G = pkl.load(f)
     G = create_graph(outline_file)
-    import pdb; pdb.set_trace()
+    print([n for n in original_G.nodes if original_G.in_degree(n) > 1])
+    print([n for n in G.nodes if G.in_degree(n) > 1])
     new_code_mapping = create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, expanded=expanded, outline_type=outline_type)
-    print([depth(G, n) for n in G.nodes])
-    import pdb; pdb.set_trace()
+    print([n for n in G.nodes if G.in_degree(n) > 1])
     with open(new_code_mapping_file, 'wb') as f:
         pkl.dump(new_code_mapping, f)
     with open(new_code_graph_file, 'wb') as f:

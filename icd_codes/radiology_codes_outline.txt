@@ -49,7 +49,6 @@ Infection
     130-136 Other Infectious And Parasitic Diseases
 
 Neoplasm
-    135 Sarcoidosis
     140-149 Malignant Neoplasm Of Lip, Oral Cavity, And Pharynx
         140 Malignant neoplasm of lip
         141 Malignant neoplasm of tongue
@@ -170,7 +169,6 @@ Vascular
             Specific code 432.1 Subdural hemorrhage 
             Specific code 432.9 Unspecified intracranial hemorrhage
         433 Occlusion and stenosis of precerebral arteries
-        433 Occlusion and stenosis of precerebral arteries
             Non-specific code 433.0 Occlusion and stenosis of basilar artery
                 Specific code 433.00 Occlusion and stenosis of basilar artery without mention of cerebral infarction convert 433.00 to ICD-10-CM
                 Specific code 433.01 Occlusion and stenosis of basilar artery with cerebral infarction convert 433.01 to ICD-10-CM
@@ -200,15 +198,6 @@ Vascular
                 Specific code 434.90 Cerebral artery occlusion, unspecified without mention of cerebral infarction convert 434.90 to ICD-10-CM
                 Specific code 434.91 Cerebral artery occlusion, unspecified with cerebral infarction convert 434.91 to ICD-10-CM
         435 Transient cerebral ischemia
-            Non-specific code 434.0 Cerebral thrombosis
-                Specific code 434.00 Cerebral thrombosis without mention of cerebral infarction convert 434.00 to ICD-10-CM
-                Specific code 434.01 Cerebral thrombosis with cerebral infarction convert 434.01 to ICD-10-CM
-            Non-specific code 434.1 Cerebral embolism
-                Specific code 434.10 Cerebral embolism without mention of cerebral infarction convert 434.10 to ICD-10-CM
-                Specific code 434.11 Cerebral embolism with cerebral infarction convert 434.11 to ICD-10-CM
-            Non-specific code 434.9 Cerebral artery occlusion unspecified
-                Specific code 434.90 Cerebral artery occlusion, unspecified without mention of cerebral infarction convert 434.90 to ICD-10-CM
-                Specific code 434.91 Cerebral artery occlusion, unspecified with cerebral infarction convert 434.91 to ICD-10-CM
         436 Acute, but ill-defined, cerebrovascular disease
         437 Other and ill-defined cerebrovascular disease
             Specific code 437.0 Cerebral atherosclerosis 
@@ -231,8 +220,7 @@ Demyelinating/Autoimmune
 Neurodegenerative
     330 Cerebral degenerations usually manifest in childhood
     331 Other cerebral degenerations
-        Non-specific code 331 Other cerebral degenerations
-            Specific code 331.0 Alzheimer's disease convert 331.0 to ICD-10-CM
+        Specific code 331.0 Alzheimer's disease convert 331.0 to ICD-10-CM
         Non-specific code 331.1 Frontotemporal dementia
             Specific code 331.11 Pick's disease convert 331.11 to ICD-10-CM
             Specific code 331.19 Other frontotemporal dementia convert 331.19 to ICD-10-CM
