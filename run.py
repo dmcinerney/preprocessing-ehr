@@ -1,4 +1,5 @@
 from unify_format.convert_bwh import main as unify_bwh
+from unify_format.convert_mimic import main as unify_mimic
 from unify_format.convert_mimic_cxr import main as unify_mimic_cxr
 from assemble_dataset.reports_and_codes_dataset import main as make_reports_codes
 from assemble_dataset.reports_and_codes_aligned_dataset import main as make_reports_codes_aligned
@@ -11,7 +12,8 @@ if __name__ == '__main__':
 #    make_reports_txt()
 #    make_reports_codes_aligned()
 #    unify_bwh()
-    make_reports_codes()
+    unify_mimic()
+#    make_reports_codes()
 #    radiology_codes()
 #    process_codes()
 #    make_reports_seq()
