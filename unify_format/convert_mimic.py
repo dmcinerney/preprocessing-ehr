@@ -3,7 +3,8 @@ import pandas as pd
 from tqdm import tqdm
 
 data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4"
-new_data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed"
+#new_data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed"
+new_data_folder = "/home/jered/Desktop/preprocessed"
 
 def create_report_csv(data_folder, new_data_folder):
     print("reading in reports")

@@ -42,7 +42,37 @@ class MedicalPredictionDataset:
     def get_datapoints(cls, reports, codes, patient_id, counts=None):
         raise NotImplementedError
 
-class ReportsToCodes(MedicalPredictionDataset):
+class ReportsToCodesAbstract(MedicalPredictionDataset):
+    @classmethod
+    def ancestors(cls, graph, nodes, stop_nodes=set()):
+        node_stack = copy.deepcopy(nodes)
+        new_nodes = set()
+        while len(node_stack) > 0:
+            node = node_stack.pop()
+            if node in stop_nodes: continue # don't add stop nodes
+            if node in new_nodes: continue # don't add nodes already there
+            in_degree = graph.in_degree(node)
+            if in_degree == 0: continue # don't add the start node
+            elif in_degree > 1: raise Exception # shouldn't have any nodes with more than one parent
+            new_nodes.add(node)
+            node_stack.extend(list(graph.predecessors(node)))
+        return list(new_nodes)
+
+    @classmethod
+    def code_set(cls, codes, code_mapping=None):
+        if code_mapping is None:
+            unique_codes = codes[['code_type','code']].drop_duplicates()
+            code_set = set(str((code_type, code)).replace('.','') for code_type, code in zip(unique_codes.code_type.tolist(), unique_codes.code.tolist()))
+        else:
+            code_set = set(code_mapping.values()).difference(set([None]))
+        return code_set
+
+    @classmethod
+    def columns(cls):
+        return ['reports', 'future_reports', 'targets', 'labels', 'previous_targets']
+
+
+class ReportsToCodes(ReportsToCodesAbstract):
     @classmethod
     def get_datapoints(cls, reports, codes, patient_id, counts=None, code_mapping=None, code_graph=None, frequency_threshold=2):
         code_set = cls.code_set(codes, code_mapping=code_mapping)
@@ -112,23 +142,8 @@ class ReportsToCodes(MedicalPredictionDataset):
         return datapoints
 
     @classmethod
-    def ancestors(cls, graph, nodes, stop_nodes=set()):
-        node_stack = copy.deepcopy(nodes)
-        new_nodes = set()
-        while len(node_stack) > 0:
-            node = node_stack.pop()
-            if node in stop_nodes: continue # don't add stop nodes
-            if node in new_nodes: continue # don't add nodes already there
-            in_degree = graph.in_degree(node)
-            if in_degree == 0: continue # don't add the start node
-            elif in_degree > 1: raise Exception # shouldn't have any nodes with more than one parent
-            new_nodes.add(node)
-            node_stack.extend(list(graph.predecessors(node)))
-        return list(new_nodes)
-
-    @classmethod
     def init_count_dict(cls):
-        return {**MedicalPredictionDataset.init_count_dict(),
+        return {**super(ReportsToCodes, cls).init_count_dict(),
                 'skipped':0,
                 'retreived':0,
                 'no_radiology_reports':0,
@@ -138,18 +153,6 @@ class ReportsToCodes(MedicalPredictionDataset):
                 'no_future_reports':0,
                 'no_pos_targets':0,}
 
-    @classmethod
-    def columns(cls):
-        return ['reports', 'future_reports', 'targets', 'labels', 'previous_targets']
-
-    @classmethod
-    def code_set(cls, codes, code_mapping=None):
-        if code_mapping is None:
-            unique_codes = codes[['code_type','code']].drop_duplicates()
-            code_set = set(str((code_type, code)).replace('.','') for code_type, code in zip(unique_codes.code_type.tolist(), unique_codes.code.tolist()))
-        else:
-            code_set = set(code_mapping.values()).difference(set([None]))
-        return code_set
 
 def get_counts(dataset):
     print("getting counts")
@@ -190,7 +193,7 @@ def main():
             code_graph = pkl.load(f)
     else:
         code_graph = None
-    patient_ids = list(set(reports.patient_id))
+    patient_ids = list(set(reports.patient_id))[:100]
     random.seed(0)
     random.shuffle(patient_ids)
     div1 = int(len(patient_ids)*.7)
