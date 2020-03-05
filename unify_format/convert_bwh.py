@@ -5,21 +5,21 @@ from datetime import datetime
 from tqdm import tqdm
 
 tables = {
-    'ContactInformation':'Con',
-    'Demographics':'Dem',
+#    'ContactInformation':'Con',
+#    'Demographics':'Dem',
     'Diagnosis':'Dia',
     'Discharge_Summaries':'Dis',
-    'Encounters':'Enc',
-    'Medication':'Med',
-    'Mrn':'Mrn',
+#    'Encounters':'Enc',
+#    'Medication':'Med',
+#    'Mrn':'Mrn',
     'Operative_reports':'Opn',
     'Pathology':'Pat',
-    'Phy':'Phy', # TODO: what is this?
-    'Procedures':'Prc',
+#    'Phy':'Phy', # TODO: what is this?
+#    'Procedures':'Prc',
     'ProgressNote':'Prg',
     'Radiology':'Rad',
-    'RadiologyTest':'Rdt',
-    'ReasonForVisit':'Rfv',
+#    'RadiologyTest':'Rdt',
+#    'ReasonForVisit':'Rfv',
     'VisitNote':'Vis'
 }
 folder = '/home/jered/Documents/data/Dataset_10-11-2019'
@@ -50,10 +50,10 @@ code_files = set([
 
 def main():
     subfolder1 = 'PreprocessedTextFiles'
-    subfolder2 = 'FinalPreprocessedData'
-    #os.mkdir(os.path.join(folder, subfolder1))
-    #for k,v in tables.items():
-    #    preprocess_to_csv(folder, subfolder1, filename, v, contains_report=k in report_files)
+    subfolder2 = 'preprocessed'
+    os.mkdir(os.path.join(folder, subfolder1))
+    for k,v in tables.items():
+        preprocess_to_csv(folder, subfolder1, filename, v, contains_report=k in report_files)
     df = {k:pd.read_csv(os.path.join(folder, subfolder1, filename % v), delimiter='|', lineterminator='\r') for k,v in tables.items()}
     os.mkdir(os.path.join(folder, subfolder2))
     text_columns = ['patient_id', 'date', 'report_type', 'description', 'text', 'from_table', 'other_info']
