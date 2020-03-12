@@ -42,7 +42,7 @@ def create_graph(filename):
                 description = ' '.join(linesplit)
             else:
                 nodename = line.strip()
-                description = None
+                description = nodename
             if nodename in G.nodes:
                 print("NEED TO DEBUG OUTLINE! MORE THAN ONE OCCURANCE OF THE SAME NODE")
                 import pdb; pdb.set_trace()
