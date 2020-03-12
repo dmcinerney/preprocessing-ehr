@@ -9,6 +9,7 @@ outline_file = 'icd_codes/radiology_codes_outline.txt'
 outline_type = 'ICD9'
 original_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping.pkl'
 original_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph.pkl'
+only_leaves = True
 expanded = True
 if expanded:
     new_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping_radiology_expanded.pkl'
@@ -194,7 +195,7 @@ def main():
     G = create_graph(outline_file)
     print([n for n in original_G.nodes if original_G.in_degree(n) > 1])
     print([n for n in G.nodes if G.in_degree(n) > 1])
-    new_code_mapping = create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, expanded=expanded, outline_type=outline_type)
+    new_code_mapping = create_icd_mapping_and_modify_graph(G, original_G, original_code_mapping, expanded=expanded, outline_type=outline_type, only_leaves=only_leaves)
     print([n for n in G.nodes if G.in_degree(n) > 1])
     with open(new_code_mapping_file, 'wb') as f:
         pkl.dump(new_code_mapping, f)
