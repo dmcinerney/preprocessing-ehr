@@ -1,4 +1,31 @@
 import pandas as pd
+from tqdm import tqdm
+
+class MedicalDataset:
+    # saves to files in a folder called name
+    @classmethod
+    def create(cls, patient_ids, **kwargs):
+        data = []
+        iterator = tqdm(patient_ids, total=len(patient_ids))
+        counts = cls.init_count_dict()
+        for patient_id in iterator:
+            datapoints = cls.get_datapoints(patient_id, counts, **kwargs)
+            data.extend(datapoints)
+            counts['num_datapoints'] += len(datapoints)
+            iterator.set_postfix(counts)
+        return pd.DataFrame(data, columns=cls.columns())
+
+    @classmethod
+    def init_count_dict(cls):
+        return {'num_datapoints':0}
+
+    @classmethod
+    def columns(cls):
+        raise NotImplementedError
+
+    @classmethod
+    def get_datapoints(cls, patient_id, counts, **kwargs):
+        raise NotImplementedError
 
 class Patient:
     def __init__(self, patient_id, reports=None, codes=None, admissions=None):

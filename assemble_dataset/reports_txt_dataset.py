@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from .patient import Patient
+from .dataset import Patient
 from random import shuffle
 import pandas as pd
 import os

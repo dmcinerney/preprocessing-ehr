@@ -4,7 +4,7 @@ import re
 import pandas as pd
 from tqdm import tqdm
 from random import shuffle
-from assemble_dataset.patient import Patient
+from assemble_dataset.dataset import Patient
 
 folder = '/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed/'
 

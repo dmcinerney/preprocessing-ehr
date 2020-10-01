@@ -3,18 +3,19 @@ import pandas as pd
 from tqdm import tqdm
 
 data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4"
-#new_data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed"
-new_data_folder = "/home/jered/Desktop/preprocessed"
+new_data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed"
+#new_data_folder = "/home/jered/Desktop/preprocessed"
 
 def create_report_csv(data_folder, new_data_folder):
     print("reading in reports")
     text_df = pd.read_csv(os.path.join(data_folder, "NOTEEVENTS.csv.gz"), low_memory=False)
     print("iterating through reports")
     text_rows = []
-    text_columns = ['patient_id', 'date', 'report_type', 'description', 'text', 'from_table', 'other_info']
-    for i,row in text_df.iterrows():
+    text_columns = ['patient_id', 'hadm_id', 'date', 'report_type', 'description', 'text', 'from_table', 'other_info']
+    for i,row in tqdm(text_df.iterrows(), total=len(text_df)):
         text_rows.append([
             row.SUBJECT_ID,
+            row.HADM_ID,
             pd.to_datetime(row.CHARTDATE),
             row.CATEGORY,
             row.DESCRIPTION,
@@ -22,8 +23,8 @@ def create_report_csv(data_folder, new_data_folder):
             "NOTEEVENTS",
             {}
         ])
-        if (i+1) % 1000 == 0:
-            print(i+1, '/', len(text_df))
+        #if (i+1) % 1000 == 0:
+        #    print(i+1, '/', len(text_df))
     pd.DataFrame(text_rows, columns=text_columns).to_csv(os.path.join(new_data_folder, 'medical_reports.csv'), index=False)
 
 def create_code_csv(data_folder, new_data_folder):
@@ -33,12 +34,13 @@ def create_code_csv(data_folder, new_data_folder):
     code_names_df = pd.read_csv(os.path.join(data_folder, "D_ICD_DIAGNOSES.csv.gz"), low_memory=False)
     print("iterating through codes")
     code_rows = []
-    code_columns = ['patient_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table', 'other_info']
+    code_columns = ['patient_id', 'hadm_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table', 'other_info']
     for i,row in tqdm(code_df.iterrows(), total=len(code_df)):
         if row.ICD9_CODE == row.ICD9_CODE:
             icd_code_rows = code_names_df[code_names_df.ICD9_CODE.str.match(pat='^0*'+row.ICD9_CODE+'\d*$')]
             code_rows.append([
                 row.SUBJECT_ID,
+                row.HADM_ID,
                 pd.to_datetime(adm_df.DISCHTIME[adm_df.HADM_ID==row.HADM_ID].iloc[0]),
                 row.SEQ_NUM,
                 [short_title for short_title in icd_code_rows.SHORT_TITLE],
