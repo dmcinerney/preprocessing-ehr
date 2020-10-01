@@ -150,7 +150,7 @@ def main():
             code_graph = pkl.load(f)
     else:
         code_graph = None
-    patient_ids = list(set(reports.patient_id))[:100]
+    patient_ids = list(set(reports.patient_id))
     random.seed(0)
     random.shuffle(patient_ids)
     div1 = int(len(patient_ids)*.7)
