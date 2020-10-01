@@ -1,10 +1,8 @@
 import os
 import pandas as pd
 from tqdm import tqdm
+from argparse import ArgumentParser
 
-data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4"
-new_data_folder = "/home/jered/Documents/data/mimic-iii-clinical-database-1.4/preprocessed"
-#new_data_folder = "/home/jered/Desktop/preprocessed"
 
 def create_report_csv(data_folder, new_data_folder):
     print("reading in reports")
@@ -79,6 +77,12 @@ def create_admissions_csv(data_folder, new_data_folder):
     new_df.to_csv(os.path.join(new_data_folder, 'admissions.csv'), index=False)
 
 def main():
+    parser = ArgumentParser()
+    parser.add_argument("mimic_folder")
+    args = parser.parse_args()
+    data_folder = args.mimic_folder
+    new_data_folder = os.path.join(data_folder, "preprocessed")
+    #new_data_folder = "/home/jered/Desktop/preprocessed"
     if not os.path.exists(new_data_folder):
         os.mkdir(new_data_folder)
     create_report_csv(data_folder, new_data_folder)

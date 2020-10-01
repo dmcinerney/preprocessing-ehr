@@ -11,9 +11,9 @@ from icd_codes.radiology_codes import main as radiology_codes
 
 if __name__ == '__main__':
 #    make_reports_txt()
-    make_reports_codes_aligned()
+#    make_reports_codes_aligned()
 #    unify_bwh()
-#    unify_mimic()
+    unify_mimic()
 #    make_reports_codes()
 #    make_reports_entities()
 #    radiology_codes()
