@@ -24,6 +24,8 @@ def process_file(filename1, filename2, split_at, encoding='utf-8'):
 def create_node_and_parents(G, code_mapping, code, description=None):
     curr_node = str(('ICD10', code))
     G.add_node(curr_node, description=description)
+    # TODO: is this a bug below? should fix, but keeping the same now until I can do tests.
+    # I think this should not be a problem if you are using radiology codes bc it is sort of corrected in radiology_codes.py
     code_mapping['curr_node'] = curr_node
     for l in range(len(code)-1,-1,-1):
         parent = str(('ICD10', code[:l]))
