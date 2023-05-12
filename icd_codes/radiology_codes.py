@@ -4,19 +4,21 @@ import networkx as nx
 from networkx.algorithms.traversal.depth_first_search import dfs_postorder_nodes
 from networkx.classes.function import set_node_attributes, subgraph
 from tqdm import tqdm
+import os
 
+path = '/work/frink/mcinerney.de/icd_codes'
 outline_file = 'icd_codes/radiology_codes_outline.txt'
 outline_type = 'ICD9'
-original_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping.pkl'
-original_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph.pkl'
+original_code_mapping_file = os.path.join(path, 'code_mapping.pkl')
+original_code_graph_file = os.path.join(path, 'code_graph.pkl')
 only_leaves = True
 expanded = True
 if expanded:
-    new_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping_radiology_expanded.pkl'
-    new_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph_radiology_expanded.pkl'
+    new_code_mapping_file = os.path.join(path, 'code_mapping_radiology_expanded.pkl')
+    new_code_graph_file = os.path.join(path, 'code_graph_radiology_expanded.pkl')
 else:
-    new_code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping_radiology.pkl'
-    new_code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph_radiology.pkl'
+    new_code_mapping_file = os.path.join(path, 'code_mapping_radiology.pkl')
+    new_code_graph_file = os.path.join(path, 'code_graph_radiology.pkl')
 
 def create_graph(filename):
     G = nx.DiGraph()

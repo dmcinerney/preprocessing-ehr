@@ -35,7 +35,7 @@ class ReportsToCodesAbstract(MedicalDataset):
 
     @classmethod
     def columns(cls):
-        return ['reports', 'future_reports', 'targets', 'labels', 'previous_targets']
+        return ['reports', 'future_reports', 'targets', 'labels', 'all_codes', 'timepoint']
 
 
 class ReportsToCodes(ReportsToCodesAbstract):
@@ -53,6 +53,8 @@ class ReportsToCodes(ReportsToCodesAbstract):
         target_dates = {target:pd.Series(sorted(list(set(dates)))) for target,dates in target_dates.items()}
         counts['skipped'] += skipped
         targets = pd.DataFrame([[target, rows.date.iloc[0], len(rows)] for target,rows in target_list], columns=['target', 'date', 'frequency']).sort_values('date')
+        all_targets = pd.concat([rows for target,rows in target_list]).sort_values('date') \
+            if len(target_list) > 0 else pd.DataFrame([])
         counts['retreived'] += len(targets)
         persistent_targets = targets[targets.frequency >= frequency_threshold]
         radiology_reports = patient.reports[patient.reports.report_type == "Radiology"]
@@ -73,19 +75,19 @@ class ReportsToCodes(ReportsToCodesAbstract):
                 counts['same_target_date'] += 1
                 continue
             prev_target_date_index = past_radiology_report_dates.index[-1]
-            if target_date+pd.to_timedelta(1, unit='Y') < row.date:
+            if target_date+pd.to_timedelta('365 days') < row.date:
                 counts['no_recent_reports'] += 1
                 continue
             past_reports = patient.compile_reports(before_date=target_date)
             if len(past_reports) == 0:
                 counts['no_past_reports'] += 1
                 continue
-            future_reports = patient.compile_reports(after_date=target_date, before_date=target_date+pd.to_timedelta(1, unit='Y'))
+            future_reports = patient.compile_reports(after_date=target_date, before_date=target_date+pd.to_timedelta('365 days'))
             if len(future_reports) == 0:
                 counts['no_future_reports'] += 1
                 continue
             positive_targets = persistent_targets[(persistent_targets.date >= target_date)\
-                                                & (persistent_targets.date < target_date+pd.to_timedelta(1, unit='Y'))].target.tolist()
+                                                & (persistent_targets.date < target_date+pd.to_timedelta('365 days'))].target.tolist()
             if code_graph is not None:
                 positive_targets = cls.ancestors(code_graph, positive_targets)
             # TODO: check that this should be zero
@@ -96,15 +98,17 @@ class ReportsToCodes(ReportsToCodesAbstract):
                                       if code_graph is not None else persistent_targets.target.tolist())
             negative_targets = list(cls.ancestors(code_graph, list(code_set), stop_nodes=not_negative_nodes)
                                     if code_graph is not None else code_set.difference(not_negative_nodes))
-            previous_targets = {target:dates[(dates < target_date)\
-                                           & (dates >= past_radiology_report_dates.iloc[0])].apply(str).to_list() for target,dates in target_dates.items()}
-            previous_targets = {target:dates for target,dates in previous_targets.items() if len(dates) > 0}
+            #previous_targets = {target:dates[(dates < target_date)\
+            #                               & (dates >= past_radiology_report_dates.iloc[0])].apply(str).to_list() for target,dates in target_dates.items()}
+            #previous_targets = {target:dates for target,dates in previous_targets.items() if len(dates) > 0}
             datapoints.append([
-                past_reports.applymap(str).to_dict(),
-                future_reports.applymap(str).to_dict(),
+                past_reports.to_csv(index=False),
+                future_reports.to_csv(index=False),
                 positive_targets+negative_targets,
                 [1]*len(positive_targets)+[0]*len(negative_targets),
-                previous_targets])
+                all_targets.to_csv(index=False),
+                target_date,
+            ])
         return datapoints
 
     @classmethod

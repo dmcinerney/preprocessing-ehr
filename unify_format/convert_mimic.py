@@ -6,7 +6,8 @@ from argparse import ArgumentParser
 
 def create_report_csv(data_folder, new_data_folder):
     print("reading in reports")
-    text_df = pd.read_csv(os.path.join(data_folder, "NOTEEVENTS.csv.gz"), low_memory=False)
+    #text_df = pd.read_csv(os.path.join(data_folder, "NOTEEVENTS.csv.gz"), low_memory=False)
+    text_df = pd.read_csv(os.path.join(data_folder, "NOTEEVENTS.csv"), low_memory=False)
     print("iterating through reports")
     text_rows = []
     text_columns = ['patient_id', 'hadm_id', 'date', 'report_type', 'description', 'text', 'from_table', 'other_info']
@@ -27,9 +28,12 @@ def create_report_csv(data_folder, new_data_folder):
 
 def create_code_csv(data_folder, new_data_folder):
     print("reading in codes")
-    code_df = pd.read_csv(os.path.join(data_folder, "DIAGNOSES_ICD.csv.gz"), low_memory=False)
-    adm_df = pd.read_csv(os.path.join(data_folder, "ADMISSIONS.csv.gz"), low_memory=False)
-    code_names_df = pd.read_csv(os.path.join(data_folder, "D_ICD_DIAGNOSES.csv.gz"), low_memory=False)
+    #code_df = pd.read_csv(os.path.join(data_folder, "DIAGNOSES_ICD.csv.gz"), low_memory=False)
+    code_df = pd.read_csv(os.path.join(data_folder, "DIAGNOSES_ICD.csv"), low_memory=False)
+    #adm_df = pd.read_csv(os.path.join(data_folder, "ADMISSIONS.csv.gz"), low_memory=False)
+    adm_df = pd.read_csv(os.path.join(data_folder, "ADMISSIONS.csv"), low_memory=False)
+    #code_names_df = pd.read_csv(os.path.join(data_folder, "D_ICD_DIAGNOSES.csv.gz"), low_memory=False)
+    code_names_df = pd.read_csv(os.path.join(data_folder, "D_ICD_DIAGNOSES.csv"), low_memory=False)
     print("iterating through codes")
     code_rows = []
     code_columns = ['patient_id', 'hadm_id', 'date', 'flag', 'name', 'code_type', 'code', 'from_table', 'other_info']
@@ -71,7 +75,8 @@ def create_code_csv(data_folder, new_data_folder):
 """
 
 def create_admissions_csv(data_folder, new_data_folder):
-    adm_df = pd.read_csv(os.path.join(data_folder, "ADMISSIONS.csv.gz"), low_memory=False)
+    #adm_df = pd.read_csv(os.path.join(data_folder, "ADMISSIONS.csv.gz"), low_memory=False)
+    adm_df = pd.read_csv(os.path.join(data_folder, "ADMISSIONS.csv"), low_memory=False)
     new_df = adm_df[['SUBJECT_ID', 'ADMITTIME', 'DISCHTIME', 'DIAGNOSIS', 'HOSPITAL_EXPIRE_FLAG']]
     new_df.columns = ['patient_id', 'date_start', 'date_end', 'diagnosis', 'expire_flag']
     new_df.to_csv(os.path.join(new_data_folder, 'admissions.csv'), index=False)

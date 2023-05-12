@@ -1,6 +1,7 @@
 import pandas as pd
 import pickle as pkl
 import networkx as nx
+import os
 
 """
 This script processes the codes by arranging them into two data structures:
@@ -8,12 +9,13 @@ This script processes the codes by arranging them into two data structures:
 2. A networkx graph
 """
 
-icd9_file = '/home/jered/Documents/data/icd_codes/diagnoses/icd9.txt'
-icd10_file = '/home/jered/Documents/data/icd_codes/diagnoses/icd10.txt'
-icd9to10_file = '/home/jered/Documents/data/icd_codes/diagnoses/icd9to10.csv'
-icd10to9_file = '/home/jered/Documents/data/icd_codes/diagnoses/icd10to9.csv'
-code_mapping_file = '/home/jered/Documents/data/icd_codes/code_mapping.pkl'
-code_graph_file = '/home/jered/Documents/data/icd_codes/code_graph.pkl'
+path = '/work/frink/mcinerney.de/icd_codes'
+icd9_file = os.path.join(path, 'diagnoses/icd9.txt')
+icd10_file = os.path.join(path, 'diagnoses/icd10.txt')
+icd9to10_file = os.path.join(path, 'diagnoses/icd9to10.csv')
+icd10to9_file = os.path.join(path, 'diagnoses/icd10to9.csv')
+code_mapping_file = os.path.join(path, 'code_mapping.pkl')
+code_graph_file = os.path.join(path, 'code_graph.pkl')
 
 def process_file(filename1, filename2, split_at, encoding='utf-8'):
     with open(filename1, 'r', encoding=encoding) as file:

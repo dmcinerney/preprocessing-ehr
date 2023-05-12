@@ -100,7 +100,7 @@ class Patient:
                 mapped_code = code_str
             code_rows = self.codes[(self.codes.code_type == code_type) & (self.codes.code == code)]
             targets[mapped_code] = code_rows if mapped_code not in targets.keys() else\
-                                   pd.concat([targets[mapped_code], code_rows], 0).sort_values('date')
+                                   pd.concat([targets[mapped_code], code_rows], axis=0).sort_values('date')
         targets = [(target,rows) for target,rows in targets.items()]
         return targets, skipped
 
